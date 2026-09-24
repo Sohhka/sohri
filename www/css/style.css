@@ -149,6 +149,7 @@ html.is-web #app { position: fixed; left: 0; right: 0; top: var(--app-top, 0px);
 main {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden; /* jamais de défilement sur le côté (tableaux et blocs de code défilent seuls) */
   padding: 20px calc(var(--safe-right) + 20px) calc(var(--safe-bottom) + 24px) calc(var(--safe-left) + 20px);
 }
 #app.has-bottom-bar main { padding-bottom: 24px; }
@@ -176,8 +177,9 @@ main {
   font-size: clamp(2.1rem, 11vw, 3.1rem); color: var(--accent);
 }
 .rate-block { position: relative; margin: 6px 0 4px; display: flex; justify-content: center; }
+/* Trait pointillé d'un bord de l'écran à l'autre (le bloc est centré : 50 % - la moitié de l'écran). */
 .rate-block::before {
-  content: ""; position: absolute; top: 50%; left: -999px; right: -999px;
+  content: ""; position: absolute; top: 50%; left: calc(50% - 50vw); right: calc(50% - 50vw);
   border-top: 1.5px dashed var(--divider); z-index: -1;
 }
 .rate-view, .rate-edit { display: flex; align-items: center; gap: 10px; background: var(--bg); padding: 6px 12px; }
@@ -193,6 +195,11 @@ main {
   background: transparent; color: var(--text); font-weight: 700; font-size: 1rem;
 }
 .footnote { text-align: center; color: var(--text-muted); font-size: 0.78rem; margin-top: 22px; line-height: 1.4; }
+/* Écran peu haut (petit téléphone) : convertisseur plus compact, pour tenir sans défilement. */
+@media (max-height: 640px) {
+  #view-converter .field { padding: 8px 2px; }
+  #view-converter .footnote { margin-top: 12px; }
+}
 
 /* ---------- Recherche, filtres ---------- */
 .search-input {
@@ -217,7 +224,7 @@ main {
   padding: 13px 4px; border-bottom: 1px solid var(--divider); cursor: pointer;
 }
 .row-icon { flex: 0 0 auto; width: 34px; font-size: 1.45rem; line-height: 1; text-align: center; }
-.list-row-main { flex: 1; min-width: 0; }
+.list-row-main { flex: 1; min-width: 0; overflow-wrap: anywhere; } /* liens et références très longs : à la ligne */
 .list-row-title { margin: 0 0 3px; font-weight: 700; font-size: 1rem; overflow-wrap: anywhere; }
 .list-row-sub { margin: 0 0 3px; color: var(--text-muted); font-size: 0.88rem; line-height: 1.35; }
 .list-row-address { margin: 0; color: var(--accent); font-size: 0.82rem; }
@@ -570,14 +577,19 @@ h2.section-title { font-size: 0.78rem; }
 .taxi-name { margin: 0 0 12px; color: #C8402C; font-size: clamp(1.1rem, 5vw, 1.8rem); font-weight: 700; }
 .taxi-address { margin: 0; font-size: clamp(1.8rem, 9vw, 3.6rem); font-weight: 800; line-height: 1.3; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* ---------- Bandeau (mise à jour, installation) ---------- */
+/* ---------- Bandeau (mise à jour, installation) ----------
+   Dans #app, sous le contenu (et au-dessus de la barre de mise en forme ou de sélection) : il ne
+   cache rien ; visionneuses, menus et boîtes de dialogue passent par-dessus. */
 .banner {
-  position: fixed; left: calc(var(--safe-left) + 12px); right: calc(var(--safe-right) + 12px);
-  bottom: calc(var(--safe-bottom) + 14px); z-index: 55; max-width: 520px; margin: 0 auto;
+  flex: 0 0 auto; align-self: center; width: calc(100% - 24px - var(--safe-left) - var(--safe-right)); max-width: 520px;
+  margin: 8px 0 calc(var(--safe-bottom) + 12px);
   display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 16px; border-radius: 16px;
-  background: var(--text); color: var(--bg); box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+  background: var(--text); color: var(--bg); box-shadow: 0 4px 16px rgba(0,0,0,0.2);
   animation: sheet-in 0.2s ease-out;
 }
+#app.has-bottom-bar .banner { margin-bottom: 8px; }
+#app.has-banner main { padding-bottom: 24px; }
+#app.has-banner ~ .toast { bottom: calc(var(--safe-bottom) + 124px); }
 .banner-text { flex: 1; margin: 0; font-size: 0.9rem; line-height: 1.4; }
 .banner-action {
   flex: 0 0 auto; padding: 8px 14px; border: none; border-radius: 100px;

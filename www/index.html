@@ -256,6 +256,14 @@
 
     </main>
 
+    <!-- BANDEAU (mise à jour disponible, astuce d'installation sur iPhone) : en bas de l'appli,
+         il réduit la zone de contenu au lieu de la recouvrir. -->
+    <div id="banner" class="banner" role="status" hidden>
+      <p id="bannerText" class="banner-text"></p>
+      <button id="bannerActionBtn" class="banner-action" type="button"></button>
+      <button id="bannerCloseBtn" class="banner-close" type="button" aria-label="Fermer">×</button>
+    </div>
+
     <!-- BARRE DE MISE EN FORME (éditeurs) -->
     <div id="mdToolbar" class="md-toolbar" hidden>
       <button type="button" data-md="emoji" aria-label="Emoji">😀</button>
@@ -351,13 +359,6 @@
     <p class="taxi-request-fr">« À cette adresse, s'il vous plaît. »</p>
     <p id="taxiName" class="taxi-name"></p>
     <p id="taxiAddress" class="taxi-address" lang="ja"></p>
-  </div>
-
-  <!-- BANDEAU (mise à jour disponible, astuce d'installation sur iPhone) -->
-  <div id="banner" class="banner" role="status" hidden>
-    <p id="bannerText" class="banner-text"></p>
-    <button id="bannerActionBtn" class="banner-action" type="button"></button>
-    <button id="bannerCloseBtn" class="banner-close" type="button" aria-label="Fermer">×</button>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

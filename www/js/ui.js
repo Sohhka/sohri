@@ -299,10 +299,12 @@ function showBanner(text, actionLabel, onAction, onClose) {
   bannerAction = onAction || null;
   bannerOnClose = onClose || null;
   byId('banner').hidden = false;
+  byId('app').classList.add('has-banner');
 }
 
 function closeBanner() {
   byId('banner').hidden = true;
+  byId('app').classList.remove('has-banner');
   bannerAction = null;
   bannerOnClose = null;
 }

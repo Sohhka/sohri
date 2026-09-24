@@ -16,3 +16,9 @@ node_modules/
 
 # Clé de signature : à sauvegarder, mais jamais dans un dépôt partagé
 android/keystore/
+
+# Configuration du projet Firebase (partage) : ajoutée à la mise en ligne par un secret GitHub,
+# et gardée ici en local pour construire l'APK
+www/js/cloud-config.js
+firebase/.firebaserc
+firebase/*.log

@@ -33,6 +33,9 @@ jobs:
           node-version: 24
       - name: Préparer la version web (fichiers hors connexion)
         run: node tools/build-web.js
+        env:
+          # Projet Firebase du partage (Settings > Secrets and variables > Actions du dépôt)
+          SOHRI_CLOUD_CONFIG: ${{ secrets.SOHRI_CLOUD_CONFIG }}
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

@@ -165,3 +165,4 @@ if (IS_WEB) {
 /* ---------- Démarrage ---------- */
 goToSection('converter');
 loadRate();
+cloudStart(); // partage : seulement si un compte est connecté sur ce téléphone

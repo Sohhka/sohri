@@ -1,0 +1,150 @@
+rules_version = '2';
+
+// Règles de sécurité de la base Firestore de SOHRI (partage entre proches).
+//
+// - Chacun n'écrit que dans son propre espace : users/{son identifiant}/...
+// - Un proche ne lit une rubrique (albums photo...) que si le propriétaire la lui a partagée :
+//   document grants/{propriétaire}_{proche}, qui liste les rubriques partagées.
+// - Inscription sur invitation : il faut le code d'un membre (codes/{code}), sauf pour le tout
+//   premier compte, qui « ouvre » le projet (meta/bootstrap).
+// - Tailles et champs vérifiés : une photo tient en quelques morceaux de moins de 1 Mo.
+//
+// Ces règles sont publiques (elles sont dans le dépôt GitHub) : c'est normal, elles décrivent qui
+// a le droit de faire quoi, sans rien contenir de secret.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+
+    function userDoc(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function codeDoc(code) { return /databases/$(database)/documents/codes/$(code); }
+    function grantDoc(owner, to) { return /databases/$(database)/documents/grants/$(owner + '_' + to); }
+    function bootstrapDoc() { return /databases/$(database)/documents/meta/bootstrap; }
+
+    // Membre : a un profil (créé avec une invitation valable, ou premier compte).
+    function isMember() { return signedIn() && exists(userDoc(me())); }
+
+    // Écriture dans son propre espace (le profil peut être créé dans la même opération).
+    function writesOwn(uid) { return signedIn() && me() == uid && existsAfter(userDoc(uid)); }
+
+    // Lecture d'une rubrique : son propriétaire, ou un proche à qui elle est partagée.
+    function canRead(owner, category) {
+      return signedIn() && (me() == owner
+        || (exists(grantDoc(owner, me())) && category in get(grantDoc(owner, me())).data.categories));
+    }
+
+    function validText(value, max) { return value is string && value.size() >= 1 && value.size() <= max; }
+    function validCode(code) { return code is string && code.matches('[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}'); }
+    function onlyKeys(data, keys) { return data.keys().hasOnly(keys); }
+    function validSources(data) {
+      return !('sources' in data) || (data.sources is map
+        && data.sources.keys().hasOnly(['albums', 'notes', 'addresses', 'documents']));
+    }
+    // Élément supprimé : il ne reste qu'une trace datée, pour que les proches le retirent aussi.
+    function tombstone(data) {
+      return onlyKeys(data, ['deleted', 'updatedAt']) && data.deleted == true && data.updatedAt == request.time;
+    }
+
+    // ---------- Ouverture du projet par le premier compte ----------
+    match /meta/bootstrap {
+      allow get: if true;
+      allow create: if signedIn() && onlyKeys(request.resource.data, ['uid']) && request.resource.data.uid == me()
+        && existsAfter(userDoc(me())) && getAfter(userDoc(me())).data.invitedBy == null;
+    }
+
+    // ---------- Codes personnels (inviter, ajouter un contact) ----------
+    match /codes/{code} {
+      allow get: if true; // impossible à deviner : il faut qu'un membre l'ait donné
+      allow create: if signedIn() && validCode(code)
+        && onlyKeys(request.resource.data, ['uid', 'name'])
+        && request.resource.data.uid == me() && validText(request.resource.data.name, 40)
+        && existsAfter(userDoc(me())) && getAfter(userDoc(me())).data.code == code;
+      allow update: if signedIn() && resource.data.uid == me()
+        && onlyKeys(request.resource.data, ['uid', 'name'])
+        && request.resource.data.uid == me() && validText(request.resource.data.name, 40);
+      allow delete: if signedIn() && resource.data.uid == me();
+    }
+
+    // ---------- Profils et espaces personnels ----------
+    match /users/{uid} {
+      function invited(data) {
+        return data.invitedWith is string && data.invitedBy is string && data.invitedBy != me()
+          && exists(codeDoc(data.invitedWith)) && get(codeDoc(data.invitedWith)).data.uid == data.invitedBy;
+      }
+      function founder(data) {
+        return data.invitedBy == null && data.invitedWith == null && !exists(bootstrapDoc())
+          && existsAfter(bootstrapDoc()) && getAfter(bootstrapDoc()).data.uid == me();
+      }
+
+      allow get: if isMember();
+      allow list: if isMember() && resource.data.invitedBy == me(); // proches inscrits avec mon code
+      allow create: if signedIn() && uid == me()
+        && request.resource.data.keys().hasAll(['name', 'code', 'invitedBy', 'invitedWith', 'createdAt'])
+        && onlyKeys(request.resource.data, ['name', 'code', 'invitedBy', 'invitedWith', 'createdAt', 'sources'])
+        && validText(request.resource.data.name, 40) && validCode(request.resource.data.code)
+        && request.resource.data.createdAt == request.time && validSources(request.resource.data)
+        && existsAfter(codeDoc(request.resource.data.code))
+        && (invited(request.resource.data) || founder(request.resource.data));
+      allow update: if signedIn() && uid == me()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'sources'])
+        && validText(request.resource.data.name, 40) && validSources(request.resource.data);
+      allow delete: if signedIn() && uid == me();
+
+      // Contacts : visibles de leur seul propriétaire.
+      match /contacts/{contactId} {
+        allow read, delete: if signedIn() && uid == me();
+        allow create, update: if writesOwn(uid) && contactId != uid
+          && onlyKeys(request.resource.data, ['name', 'code', 'addedAt'])
+          && validText(request.resource.data.name, 40) && validCode(request.resource.data.code)
+          && request.resource.data.addedAt is timestamp && exists(userDoc(contactId));
+      }
+
+      // Rubrique Images : albums, photos (miniature comprise) et contenu des photos, en morceaux.
+      match /albums/{albumId} {
+        allow read: if canRead(uid, 'albums');
+        allow create, update: if writesOwn(uid) && (tombstone(request.resource.data) || (
+          onlyKeys(request.resource.data, ['name', 'icon', 'updatedAt'])
+          && validText(request.resource.data.name, 100) && validText(request.resource.data.icon, 32)
+          && request.resource.data.updatedAt == request.time));
+        allow delete: if signedIn() && uid == me();
+      }
+      match /photos/{photoId} {
+        allow read: if canRead(uid, 'albums');
+        allow create, update: if writesOwn(uid) && (tombstone(request.resource.data) || (
+          onlyKeys(request.resource.data, ['album', 'takenAt', 'width', 'height', 'thumb', 'parts', 'size', 'updatedAt'])
+          && validText(request.resource.data.album, 64)
+          && request.resource.data.takenAt is int && request.resource.data.width is int && request.resource.data.height is int
+          && request.resource.data.thumb is bytes && request.resource.data.thumb.size() <= 200000
+          && request.resource.data.parts is int && request.resource.data.parts >= 1 && request.resource.data.parts <= 20
+          && request.resource.data.size is int && request.resource.data.updatedAt == request.time));
+        allow delete: if signedIn() && uid == me();
+      }
+      match /photoParts/{partId} {
+        allow read: if canRead(uid, 'albums');
+        allow create, update: if writesOwn(uid)
+          && onlyKeys(request.resource.data, ['photo', 'index', 'data'])
+          && validText(request.resource.data.photo, 64)
+          && request.resource.data.index is int && request.resource.data.index >= 0 && request.resource.data.index < 20
+          && request.resource.data.data is bytes && request.resource.data.data.size() <= 950000;
+        allow delete: if signedIn() && uid == me();
+      }
+    }
+
+    // ---------- Partages : ce qu'un membre montre à un de ses proches ----------
+    match /grants/{grantId} {
+      allow read: if signedIn() && (resource.data.owner == me() || resource.data.to == me());
+      allow create, update: if isMember()
+        && onlyKeys(request.resource.data, ['owner', 'to', 'ownerName', 'categories', 'updatedAt'])
+        && request.resource.data.owner == me()
+        && request.resource.data.to is string && request.resource.data.to != me()
+        && grantId == me() + '_' + request.resource.data.to
+        && validText(request.resource.data.ownerName, 40)
+        && request.resource.data.categories is list && request.resource.data.categories.size() <= 4
+        && request.resource.data.categories.hasOnly(['albums', 'notes', 'addresses', 'documents'])
+        && request.resource.data.updatedAt == request.time
+        && exists(userDoc(request.resource.data.to));
+      allow delete: if signedIn() && resource.data.owner == me();
+    }
+  }
+}

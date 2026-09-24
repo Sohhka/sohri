@@ -473,6 +473,30 @@ main {
   background: var(--surface); color: var(--text); font-size: 1.5rem; line-height: 1; box-shadow: var(--shadow);
 }
 
+/* ---------- Partage ---------- */
+.share-intro-title { margin: 0 0 8px; font-size: 1.1rem; font-weight: 800; }
+.block-btn { display: block; width: 100%; margin-top: 16px; }
+.profile-head { display: flex; align-items: center; gap: 12px; }
+.profile-avatar { flex: 0 0 auto; font-size: 2.2rem; line-height: 1; }
+.profile-main { min-width: 0; }
+.profile-name { margin: 0; font-size: 1.15rem; font-weight: 800; overflow-wrap: anywhere; }
+.profile-email { margin: 2px 0 0; font-size: 0.85rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.profile-code-label { margin-top: 16px; }
+.profile-code {
+  margin: 0; font-size: 1.7rem; font-weight: 800; letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums; color: var(--accent); user-select: all;
+}
+.cloud-status { min-height: 1.4em; margin: 6px 4px 0; font-size: 0.85rem; line-height: 1.4; color: var(--text-muted); }
+.link-btn { padding: 8px 2px; border: none; background: none; color: var(--accent); font-weight: 700; font-size: 0.92rem; }
+.cloud-status .link-btn { padding: 0; font-size: inherit; }
+.toggle-row { cursor: pointer; }
+.toggle { flex: 0 0 auto; width: 24px; height: 24px; margin: 0 6px 0 0; accent-color: var(--accent); }
+.source-card { margin-top: 18px; }
+.source-card .card-text { font-size: 0.95rem; }
+.account-form .text-input { margin-bottom: 2px; }
+.account-form .hint { margin-top: 6px; }
+.form-error { margin: 16px 2px 0; color: var(--danger); font-size: 0.92rem; line-height: 1.4; }
+
 /* ---------- Paramètres ---------- */
 h2.section-title { font-size: 0.78rem; }
 .hint { margin: 8px 2px; color: var(--text-muted); font-size: 0.88rem; line-height: 1.45; }

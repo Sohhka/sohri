@@ -82,6 +82,9 @@ if (-not $sdk) {
 }
 Write-Host "JDK : $jdk"
 Write-Host "SDK : $sdk"
+if (-not (Test-Path (Join-Path $PSScriptRoot 'www\js\cloud-config.js'))) {
+    Write-Host 'www\js\cloud-config.js absent : l''APK sera construit sans le partage entre proches (voir README).' -ForegroundColor Yellow
+}
 Write-AsciiFile (Join-Path $androidDir 'local.properties') @("sdk.dir=$(ConvertTo-PropertyValue $sdk)")
 
 $keystoreDir = Join-Path $androidDir 'keystore'

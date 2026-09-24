@@ -12,15 +12,18 @@ Appli pour un voyage au Japon, sur **Android** (APK) et sur **iPhone** (version 
 - **Images** : des albums (« Tokyo », « Shibuya »…) pour ranger ses photos, classées par jour de prise de vue.
 - **Documents** : tous ses fichiers (PDF, images, vidéos, sons, textes…) rangés dans des dossiers
   et **affichés directement dans l'appli**.
+- **Partage** (facultatif) : avec un compte, montrer ses **Images** aux proches de son choix, qui
+  les voient dans leur appli, même hors connexion une fois reçues.
 - **Paramètres** : thème **clair**, **sombre** ou automatique ; **sauvegarde** complète dans un fichier,
   et restauration.
 
-Tout fonctionne hors connexion et les données restent sur le téléphone. L'appli Android ne demande
-aucune autorisation, pas même l'accès à Internet.
+Tout fonctionne hors connexion et les données restent sur le téléphone. Sans compte, l'appli ne
+contacte aucun serveur : l'accès à Internet ne sert qu'au partage entre proches.
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-1.3.apk` sur le téléphone (câble USB, Google Drive, e-mail…).
+1. Copier `dist/Sohri-1.4.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+   télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
 3. Si Play Protect signale une appli inconnue, choisir d'installer quand même : c'est normal pour
@@ -92,6 +95,40 @@ sauvegarde faite sur Android se restaure sur l'iPhone, et inversement.
 À faire avant le départ et de temps en temps pendant le voyage : désinstaller l'appli, ou
 « Vider le stockage » dans les paramètres Android (sur iPhone : supprimer l'icône), efface tout.
 
+## Partager avec ses proches (facultatif)
+
+Sans compte, rien ne change : l'appli reste entièrement hors connexion. Avec un compte (menu
+**Partage**), on choisit quelles rubriques montrer, et à qui. Pour l'instant : les **Images**
+(albums et photos).
+
+1. **Créer un compte** : prénom (ce que voient les proches), adresse e-mail et mot de passe (pour se
+   connecter ; l'adresse n'est montrée à personne), et **code d'invitation** : le code d'un proche
+   déjà inscrit. Seul le tout premier compte n'en a pas besoin.
+2. Chaque compte a un **code** (par exemple `K7F2-9QX4`) : **Inviter** l'envoie par SMS, WhatsApp,
+   e-mail… Un proche inscrit avec ce code arrive tout seul dans les contacts ; sinon, **Ajouter un
+   contact** avec son code.
+3. **Ce que je partage → Images** : cocher les proches qui peuvent voir les albums. Les photos
+   partent réduites (1600 pixels) vers le serveur, dans l'ordre, dès qu'il y a Internet ; les
+   ajouts, suppressions et changements de nom suivent tout seuls.
+4. Chez le proche, **Partagés avec moi** : les albums (en lecture seule) sont copiés sur son
+   téléphone et restent consultables **hors connexion**. Les nouveautés arrivent quand il ouvre
+   l'appli avec Internet.
+
+Ça marche entre la version web (iPhone) et l'appli Android : le compte est le même partout.
+
+À savoir :
+
+- Seules les rubriques partagées quittent le téléphone. Arrêter tous les partages d'une rubrique
+  efface ses photos du serveur ; **Supprimer mon compte** efface tout ce qui est en ligne (les
+  données du téléphone restent).
+- Serveur : Firebase (Google), formule gratuite, sans carte bancaire : 1 Go pour tout le monde,
+  soit environ 3 000 photos partagées. Au-delà, les nouveaux envois sont refusés (aucune facture
+  possible).
+- Si le compte est ouvert sur plusieurs appareils, un seul envoie les photos (celui où le partage
+  a été activé) ; « Envoyer plutôt celles de cet appareil » change d'appareil.
+- **Se déconnecter** retire du téléphone ce que les proches y avaient partagé ; tout revient à la
+  reconnexion.
+
 ## Organisation du dossier
 
 ```
@@ -119,6 +156,9 @@ Sohri/
 │       ├── documents.js     Documents : fichiers et dossiers
 │       ├── backup.js        sauvegarde et restauration (.zip)
 │       ├── settings.js      Paramètres
+│       ├── cloud.js         partage : comptes, contacts, envoi et réception (API de Firebase)
+│       ├── sharing.js       partage : écrans (compte, contacts, albums reçus)
+│       ├── cloud-config.js  projet Firebase (local, jamais dans le dépôt : voir plus bas)
 │       ├── app.js           menu, bouton retour, version web (hors connexion, mises à jour,
 │       │                    clavier de l'iPhone), démarrage
 │       └── vendor/          bibliothèques : marked (markdown, licence MIT),
@@ -128,6 +168,8 @@ Sohri/
 │   ├── app/src/main/res/    icône, couleurs, nom de l'appli
 │   ├── app/build.gradle.kts numéro de version, SDK, dépendances
 │   └── keystore/            clé de signature : À CONSERVER (voir plus bas), jamais sur GitHub
+├── firebase/                partage : règles de sécurité de la base (firestore.rules), réglages
+│                            de l'émulateur pour les essais (firebase.json)
 ├── tools/build-web.js       prépare la version web dans _site/ (liste des fichiers hors connexion)
 ├── .github/workflows/       mise en ligne automatique de la version web (GitHub Pages)
 ├── dist/                    APK générés
@@ -179,8 +221,9 @@ projet est dans OneDrive, les fichiers de compilation temporaires sont placés d
 `MainActivity` affiche `www/` dans une WebView, servi localement à l'adresse
 `https://appassets.androidplatform.net/` (`WebViewAssetLoader`). Les données sont dans IndexedDB
 (magasins `notes`, `addresses`, `settings`, `folders` pour les dossiers et les albums, `photos`,
-`documents` pour la description des fichiers et `documentFiles` pour leur contenu). L'appli
-Android ajoute ce qu'une WebView ne fait pas seule :
+`documents` pour la description des fichiers et `documentFiles` pour leur contenu ; pour le
+partage, hors sauvegardes : `cloud`, `sharedAlbums`, `sharedPhotos`). L'appli Android ajoute ce
+qu'une WebView ne fait pas seule :
 
 | Côté Android                               | Côté page (`window.AndroidBridge` et fonctions globales)                  |
 |--------------------------------------------|---------------------------------------------------------------------------|
@@ -188,6 +231,7 @@ Android ajoute ce qu'une WebView ne fait pas seule :
 | ouverture de liens (Maps, site, téléphone) | `openExternal(url)`                                                       |
 | ouvrir / partager / « enregistrer sous »   | `fileBegin(nom, type)`, `fileAppend(id, base64)`, `fileFinish(id, action)` |
 | presse-papiers                             | `copyText(texte)`                                                         |
+| envoi d'un texte (invitation au partage)   | `shareText(texte)`                                                        |
 | thème choisi et thème du téléphone         | `getThemePreference()`, `setThemePreference()`, `isSystemDark()` ; `onSystemThemeChanged(sombre)` |
 | barres système et clavier                  | `getSafeAreaInsets()` ; `setSafeAreaInsets(haut, droite, bas, gauche)` → variables CSS `--safe-*` |
 | vidéo en plein écran                       | bouton ⛶ du lecteur vidéo (`onShowCustomView`)                            |
@@ -213,3 +257,33 @@ Sans `window.AndroidBridge`, la page s'adapte (classe `is-web` sur `<html>`) :
 - appli installée sur l'écran d'accueil (classe `ios-standalone`) : la barre d'état est
   transparente, une bande foncée la garde lisible ;
 - le thème choisi est gardé dans `localStorage`.
+
+### Partage (Firebase)
+
+`cloud.js` utilise directement l'API web de Firebase (Authentication pour les comptes, Firestore
+pour les données), sans bibliothèque. En ligne, chacun a son espace `users/{id}` (nom, code,
+contacts, et ses albums partagés : `albums`, `photos` avec la miniature, `photoParts` pour la photo
+en morceaux de moins de 1 Mo) ; `grants/{propriétaire}_{proche}` liste les rubriques qu'un membre
+montre à un proche. Les suppressions laissent une trace datée : chaque téléphone ne demande que ce
+qui a changé depuis sa dernière visite.
+
+**Qui peut faire quoi** est décidé par le serveur, dans `firebase/firestore.rules` : chacun n'écrit
+que chez lui, ne lit que ce qu'on lui a partagé, et l'inscription demande le code d'un membre.
+Pour les installer après une modification (une fois connecté avec `npx firebase-tools login`) :
+
+```
+npx firebase-tools deploy --only firestore:rules --config firebase/firebase.json --project <identifiant du projet>
+```
+
+**Configuration** : `www/js/cloud-config.js` (`window.SOHRI_CLOUD = { apiKey, projectId }`) est
+exclu du dépôt. En local, il sert à construire l'APK ; pour le site, GitHub l'écrit à partir du
+secret `SOHRI_CLOUD_CONFIG` du dépôt (`{"apiKey": "...", "projectId": "..."}`). Cette clé n'est pas
+un secret au sens strict (elle est visible dans toute appli web Firebase, et dans l'APK) : elle
+identifie le projet, et ce sont les règles ci-dessus qui protègent les données. Sans ce fichier, la
+rubrique Partage est simplement masquée.
+
+**Essais** sans toucher au vrai projet : l'émulateur Firebase (il faut Java 21, par exemple celui
+installé avec Android Studio) : `npx firebase-tools emulators:start --only auth,firestore --project
+demo-sohri --config firebase/firebase.json`, puis, dans la page,
+`window.SOHRI_CLOUD = { apiKey: 'demo', projectId: 'demo-sohri', emulator: { auth:
+'http://127.0.0.1:9099', firestore: 'http://127.0.0.1:8085' } }` avant le chargement des scripts.

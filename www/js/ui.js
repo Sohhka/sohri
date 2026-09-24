@@ -122,6 +122,7 @@ function showDialog(message, options) {
   byId('dialogIconBtn').hidden = !dialogIcon;
   byId('dialogIconBtn').textContent = dialogIcon || '';
   if (dialogIsPrompt) {
+    byId('dialogInput').type = options.input.type || 'text';
     byId('dialogInput').value = options.input.value || '';
     byId('dialogInput').placeholder = options.input.placeholder || '';
   }
@@ -143,6 +144,7 @@ function closeDialog(ok) {
   dialogResolve = null;
   dialogOnConfirm = null;
   dialogEl.hidden = true;
+  byId('dialogInput').value = ''; // un mot de passe ne reste pas dans la page
   byId('dialogInput').blur();
   if (ok && onConfirm) {
     try {
@@ -162,7 +164,8 @@ function uiConfirm(message, okLabel, danger) {
   return showDialog(message, { cancelable: true, okLabel: okLabel, danger: danger });
 }
 
-/* Demande un nom (et une icône emoji si options.icon est fourni) : { value, icon }, ou null. */
+/* Demande un nom (et une icône emoji si options.icon est fourni) : { value, icon }, ou null.
+   options.type : 'password' pour un mot de passe. */
 function uiPrompt(title, options) {
   options = options || {};
   return showDialog(options.message, {
@@ -170,7 +173,7 @@ function uiPrompt(title, options) {
     cancelable: true,
     okLabel: options.okLabel,
     icon: options.icon,
-    input: { value: options.value, placeholder: options.placeholder }
+    input: { value: options.value, placeholder: options.placeholder, type: options.type }
   });
 }
 
@@ -372,6 +375,13 @@ function viewerShow(index, direction) {
     void viewerImg.offsetWidth; // relance l'animation
     viewerImg.classList.add(direction > 0 ? 'slide-next' : 'slide-prev');
   }
+}
+
+/* Remplace une image de la visionneuse (photo reçue en taille réelle, par exemple). */
+function viewerReplace(index, item) {
+  if (viewerEl.hidden || index >= viewerItems.length) return;
+  viewerItems[index] = item;
+  if (index === viewerIndex && !viewerEl.classList.contains('zoomed')) viewerShow(index);
 }
 
 /* Retire la photo affichée (après suppression) : passe à la suivante, ou ferme s'il n'y en a plus. */

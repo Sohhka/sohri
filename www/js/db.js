@@ -1,6 +1,8 @@
 /* ---------- Base de données locale (IndexedDB) ---------- */
 var DB_NAME = 'travelAppDB';
-var DB_VERSION = 3;
+var DB_VERSION = 4;
+// Magasins des données de l'utilisateur (ceux des sauvegardes). Le partage (cloud.js) a les siens :
+// « cloud », « sharedAlbums », « sharedPhotos », jamais sauvegardés.
 var DB_STORES = ['notes', 'addresses', 'settings', 'folders', 'photos', 'documents', 'documentFiles'];
 
 function openDB() {
@@ -32,6 +34,18 @@ function openDB() {
       if (!db.objectStoreNames.contains('documentFiles')) {
         db.createObjectStore('documentFiles', { keyPath: 'id', autoIncrement: true });
       }
+      // Version 4 : partage entre proches (compte, état des envois, ce que les proches partagent).
+      if (!db.objectStoreNames.contains('cloud')) {
+        db.createObjectStore('cloud', { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains('sharedAlbums')) {
+        db.createObjectStore('sharedAlbums', { keyPath: 'key' }).createIndex('owner', 'owner');
+      }
+      if (!db.objectStoreNames.contains('sharedPhotos')) {
+        var shared = db.createObjectStore('sharedPhotos', { keyPath: 'key' });
+        shared.createIndex('owner', 'owner');
+        shared.createIndex('albumKey', 'albumKey');
+      }
     };
     req.onsuccess = function (e) {
       var db = e.target.result;
@@ -43,6 +57,19 @@ function openDB() {
 }
 
 var dbPromise = openDB().catch(function (err) { console.error('DB indisponible', err); return null; });
+
+/* Prévenus après chaque écriture réussie : fn(noms des magasins modifiés). Sert au partage, qui
+   envoie les albums modifiés. */
+var dbChangeListeners = [];
+function onDbChange(fn) {
+  dbChangeListeners.push(fn);
+}
+function notifyDbChange(storeNames) {
+  var names = [].concat(storeNames);
+  dbChangeListeners.forEach(function (fn) {
+    try { fn(names); } catch (e) { console.error(e); }
+  });
+}
 
 /* Lectures : sans base, on renvoie une liste vide. Écritures : sans base, erreur (sinon la saisie
    serait perdue sans que personne ne le sache), et succès seulement une fois la transaction
@@ -86,7 +113,10 @@ function dbPut(storeName, value) {
       if (!db) return reject(new Error('Base de données indisponible'));
       var tx = db.transaction(storeName, 'readwrite');
       var req = tx.objectStore(storeName).put(value);
-      tx.oncomplete = function () { resolve(req.result); };
+      tx.oncomplete = function () {
+        resolve(req.result);
+        notifyDbChange(storeName);
+      };
       tx.onerror = function () { reject(tx.error || req.error); };
       tx.onabort = function () { reject(tx.error || new Error('Écriture annulée')); };
     });
@@ -98,7 +128,10 @@ function dbDelete(storeName, key) {
       if (!db) return reject(new Error('Base de données indisponible'));
       var tx = db.transaction(storeName, 'readwrite');
       var req = tx.objectStore(storeName)['delete'](key);
-      tx.oncomplete = function () { resolve(); };
+      tx.oncomplete = function () {
+        resolve();
+        notifyDbChange(storeName);
+      };
       tx.onerror = function () { reject(tx.error || req.error); };
       tx.onabort = function () { reject(tx.error || new Error('Suppression annulée')); };
     });
@@ -112,7 +145,10 @@ function dbWrite(storeNames, work) {
     return new Promise(function (resolve, reject) {
       if (!db) return reject(new Error('Base de données indisponible'));
       var tx = db.transaction(storeNames, 'readwrite');
-      tx.oncomplete = function () { resolve(); };
+      tx.oncomplete = function () {
+        resolve();
+        notifyDbChange(storeNames);
+      };
       tx.onerror = function () { reject(tx.error); };
       tx.onabort = function () { reject(tx.error || new Error('Écriture annulée')); };
       work(tx);

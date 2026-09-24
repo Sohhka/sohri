@@ -545,6 +545,19 @@ public class MainActivity extends ComponentActivity {
             });
         }
 
+        /* Texte à envoyer (invitation au partage) : SMS, WhatsApp, e-mail... au choix. */
+        @JavascriptInterface
+        public void shareText(String text) {
+            runOnUiThread(() -> {
+                Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text);
+                try {
+                    startActivity(Intent.createChooser(send, null));
+                } catch (ActivityNotFoundException e) {
+                    Toast.makeText(MainActivity.this, R.string.no_app_for_text, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
         @JavascriptInterface
         public String getAppVersion() {
             try {

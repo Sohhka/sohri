@@ -1,0 +1,15 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "photoParts",
+      "fieldPath": "data",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "photos",
+      "fieldPath": "thumb",
+      "indexes": []
+    }
+  ]
+}

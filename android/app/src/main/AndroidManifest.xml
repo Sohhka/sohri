@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Seulement pour le partage entre proches (compte facultatif) : sans compte, l'appli ne
+         contacte aucun serveur. Autorisation accordée d'office, sans question à l'installation. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

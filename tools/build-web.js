@@ -15,6 +15,19 @@ const output = path.join(root, '_site');
 fs.rmSync(output, { recursive: true, force: true });
 fs.cpSync(source, output, { recursive: true });
 
+// Configuration du partage (projet Firebase) : absente du dépôt. Sur GitHub, elle vient du secret
+// SOHRI_CLOUD_CONFIG ({ "apiKey": ..., "projectId": ... }) ; en local, de www/js/cloud-config.js.
+// Sans elle, le partage est simplement masqué dans l'appli.
+const cloudConfigPath = path.join(output, 'js', 'cloud-config.js');
+if (process.env.SOHRI_CLOUD_CONFIG) {
+  const config = JSON.parse(process.env.SOHRI_CLOUD_CONFIG);
+  if (typeof config.apiKey !== 'string' || typeof config.projectId !== 'string') throw new Error('SOHRI_CLOUD_CONFIG : apiKey et projectId attendus');
+  const kept = { apiKey: config.apiKey, projectId: config.projectId }; // rien d'autre n'est publié
+  fs.writeFileSync(cloudConfigPath, `window.SOHRI_CLOUD = window.SOHRI_CLOUD || ${JSON.stringify(kept)};\n`);
+} else if (!fs.existsSync(cloudConfigPath)) {
+  fs.writeFileSync(cloudConfigPath, 'window.SOHRI_CLOUD = window.SOHRI_CLOUD || null;\n');
+}
+
 const files = [];
 (function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

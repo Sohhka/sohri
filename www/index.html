@@ -85,6 +85,7 @@
         <button class="drawer-item" type="button" data-section="addresses"><span class="drawer-icon">📍</span>Carnet d'adresses</button>
         <button class="drawer-item" type="button" data-section="albums"><span class="drawer-icon">🖼️</span>Images</button>
         <button class="drawer-item" type="button" data-section="documents"><span class="drawer-icon">📂</span>Documents</button>
+        <button id="drawerSharing" class="drawer-item" type="button" data-section="sharing" hidden><span class="drawer-icon">👥</span>Partage</button>
         <div class="drawer-separator"></div>
         <button class="drawer-item" type="button" data-section="settings"><span class="drawer-icon">⚙️</span>Paramètres</button>
       </div>
@@ -254,6 +255,35 @@
         <p id="installInfo" class="hint" hidden>Pour installer SOHRI sur l'iPhone (plein écran, hors connexion)&nbsp;: dans Safari, touche Partager (ou ••• puis Partager), puis «&nbsp;Sur l'écran d'accueil&nbsp;». Les données de l'appli installée sont séparées de celles de Safari.</p>
       </section>
 
+      <!-- PARTAGE : compte, contacts, ce que je partage, ce que mes proches partagent -->
+      <section id="view-sharing" class="view" hidden>
+        <div id="sharingContent"></div>
+      </section>
+
+      <!-- CRÉER UN COMPTE / SE CONNECTER -->
+      <section id="view-account" class="view" hidden>
+        <form id="accountForm" class="account-form" novalidate></form>
+      </section>
+
+      <!-- UNE RUBRIQUE PARTAGÉE, ET AVEC QUI -->
+      <section id="view-share-category" class="view" hidden>
+        <div id="shareCategoryContent"></div>
+      </section>
+
+      <!-- ALBUMS D'UN PROCHE -->
+      <section id="view-shared-albums" class="view view-wide" hidden>
+        <p id="sharedAlbumsInfo" class="hint"></p>
+        <div id="sharedAlbumGrid" class="album-grid"></div>
+        <p id="sharedAlbumsEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- PHOTOS D'UN ALBUM D'UN PROCHE -->
+      <section id="view-shared-album" class="view view-wide" hidden>
+        <p id="sharedAlbumInfo" class="hint" hidden></p>
+        <div id="sharedPhotoGrid"></div>
+        <p id="sharedAlbumEmpty" class="empty" hidden></p>
+      </section>
+
     </main>
 
     <!-- BANDEAU (mise à jour disponible, astuce d'installation sur iPhone) : en bas de l'appli,
@@ -379,6 +409,9 @@
 <script src="js/documents.js"></script>
 <script src="js/backup.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/cloud-config.js"></script>
+<script src="js/cloud.js"></script>
+<script src="js/sharing.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,11 @@
+<resources>
+    <!-- Mêmes valeurs que les variables bg et accent de www/css/style.css.
+         app_background (clair, ou sombre via values-night) : fond affiché au lancement, selon le téléphone.
+         app_background_light / _dark : fond selon le thème choisi dans l'appli. -->
+    <color name="app_background">#F5F1E8</color>
+    <color name="app_background_light">#F5F1E8</color>
+    <color name="app_background_dark">#12172B</color>
+    <color name="app_accent">#C8402C</color>
+
+    <color name="ic_launcher_background">#F5F1E8</color>
+</resources>

@@ -1,0 +1,5 @@
+<resources>
+    <!-- Mêmes valeurs que les variables bg et accent de www/css/style.css (thème sombre) -->
+    <color name="app_background">#12172B</color>
+    <color name="app_accent">#E35C3D</color>
+</resources>

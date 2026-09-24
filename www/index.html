@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOHRI</title>
+<meta name="description" content="Voyage au Japon : convertisseur, notes, adresses, images et documents, même sans connexion.">
+<meta name="theme-color" content="#FFFFFF">
+<!-- Version web installée sur l'iPhone (« Sur l'écran d'accueil ») : plein écran, barre d'état
+     transparente (texte blanc, voir .ios-standalone dans style.css), nom et icône. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOHRI">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<script>
+  /* Thème (automatique, clair ou sombre) et marges des barres système, appliqués avant le premier
+     affichage. Dans l'appli Android, le choix du thème est gardé par Android (window.AndroidBridge) ;
+     dans un navigateur, par localStorage. */
+  (function () {
+    var root = document.documentElement;
+    var bridge = window.AndroidBridge;
+    var media = window.matchMedia('(prefers-color-scheme: dark)');
+    var systemDark = bridge ? bridge.isSystemDark() : media.matches;
+    // Version web (iPhone, navigateur) ; et appli installée sur l'écran d'accueil d'un iPhone.
+    if (!bridge) root.classList.add('is-web');
+    if (window.navigator.standalone === true) root.classList.add('ios-standalone');
+
+    window.getThemePreference = function () {
+      if (bridge) return bridge.getThemePreference();
+      try { return localStorage.getItem('sohri.theme') || 'auto'; } catch (e) { return 'auto'; }
+    };
+    window.setThemePreference = function (preference) {
+      if (bridge) bridge.setThemePreference(preference);
+      else { try { localStorage.setItem('sohri.theme', preference); } catch (e) {} }
+      applyTheme();
+    };
+    function applyTheme() {
+      var preference = getThemePreference();
+      var dark = preference === 'dark' || (preference === 'auto' && systemDark);
+      root.setAttribute('data-theme', dark ? 'dark' : 'light');
+      // Couleur de la barre du navigateur (Android, Safari), assortie à la barre du haut.
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#1B2140' : '#FFFFFF');
+    }
+    /* Appelée par Android quand le téléphone passe en mode clair ou sombre. */
+    window.onSystemThemeChanged = function (dark) {
+      systemDark = dark;
+      applyTheme();
+    };
+    if (!bridge && media.addEventListener) {
+      media.addEventListener('change', function (e) { window.onSystemThemeChanged(e.matches); });
+    }
+
+    window.setSafeAreaInsets = function (top, right, bottom, left) {
+      root.style.setProperty('--safe-top', top + 'px');
+      root.style.setProperty('--safe-right', right + 'px');
+      root.style.setProperty('--safe-bottom', bottom + 'px');
+      root.style.setProperty('--safe-left', left + 'px');
+    };
+    if (bridge) {
+      var insets = JSON.parse(bridge.getSafeAreaInsets());
+      setSafeAreaInsets(insets[0], insets[1], insets[2], insets[3]);
+    }
+    applyTheme();
+  })();
+</script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <button id="navBtn" class="icon-btn" type="button" aria-label="Menu">☰</button>
+      <h1 id="viewTitle"></h1>
+      <div id="topActions" class="top-actions"></div>
+    </header>
+
+    <nav id="drawer" class="drawer" hidden>
+      <div class="drawer-backdrop" id="drawerBackdrop"></div>
+      <div class="drawer-panel">
+        <p class="drawer-title">SOHRI</p>
+        <button class="drawer-item" type="button" data-section="converter"><span class="drawer-icon">💴</span>Convertisseur ¥ → €</button>
+        <button class="drawer-item" type="button" data-section="notes"><span class="drawer-icon">📝</span>Notes</button>
+        <button class="drawer-item" type="button" data-section="addresses"><span class="drawer-icon">📍</span>Carnet d'adresses</button>
+        <button class="drawer-item" type="button" data-section="albums"><span class="drawer-icon">🖼️</span>Images</button>
+        <button class="drawer-item" type="button" data-section="documents"><span class="drawer-icon">📂</span>Documents</button>
+        <div class="drawer-separator"></div>
+        <button class="drawer-item" type="button" data-section="settings"><span class="drawer-icon">⚙️</span>Paramètres</button>
+      </div>
+    </nav>
+
+    <main id="content">
+
+      <!-- CONVERTISSEUR -->
+      <section id="view-converter" class="view">
+        <div class="field">
+          <label for="yenInput" class="field-label">Yen</label>
+          <div class="input-row">
+            <span class="currency-sign">¥</span>
+            <input id="yenInput" type="text" inputmode="numeric" autocomplete="off" placeholder="0" aria-label="Montant en yens">
+          </div>
+        </div>
+
+        <div class="rate-block" id="rateBlock">
+          <div class="rate-view" id="rateView">
+            <span id="rateText"></span>
+            <button class="rate-edit-btn" id="rateEditBtn" type="button">Modifier</button>
+          </div>
+          <div class="rate-edit" id="rateEdit" hidden>
+            <span class="rate-edit-label">1 € =</span>
+            <input id="rateInput" type="text" inputmode="decimal" aria-label="Taux de change">
+            <span class="rate-edit-label">¥</span>
+            <button class="rate-save-btn" id="rateSaveBtn" type="button">OK</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Euro</span>
+          <div class="result-row">
+            <span id="eurResult" class="result-value">0,00</span>
+            <span class="currency-sign">€</span>
+          </div>
+        </div>
+        <p class="footnote">Fonctionne sans connexion. Taux indicatif — mets-le à jour avant le départ.</p>
+      </section>
+
+      <!-- NOTES : dossiers et notes (ou contenu d'un dossier) -->
+      <section id="view-notes" class="view" hidden>
+        <input id="notesSearch" class="search-input" type="search" placeholder="Rechercher dans les notes" autocomplete="off" aria-label="Rechercher dans les notes">
+        <div id="notesContent" class="list"></div>
+        <p id="notesEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- NOTE EN LECTURE -->
+      <section id="view-note" class="view" hidden>
+        <div id="noteDetail"></div>
+      </section>
+
+      <!-- ÉDITION D'UNE NOTE -->
+      <section id="view-note-edit" class="view" hidden>
+        <div class="title-row">
+          <button id="noteIconBtn" class="emoji-btn" type="button" aria-label="Choisir l'icône de la note">📝</button>
+          <input id="noteTitle" type="text" class="text-input title-input" placeholder="Titre de la note" aria-label="Titre">
+        </div>
+
+        <div class="segmented" role="tablist">
+          <button id="noteWriteTab" class="segment" type="button" role="tab" aria-selected="true">Écrire</button>
+          <button id="notePreviewTab" class="segment" type="button" role="tab" aria-selected="false">Aperçu</button>
+        </div>
+        <textarea id="noteBody" class="text-area md-input" aria-label="Texte de la note"
+                  placeholder="Écris ta note ici... La barre en bas de l'écran permet la mise en forme : gras, titres, listes, cases à cocher, emojis..."></textarea>
+        <div id="notePreview" class="markdown md-preview" hidden></div>
+
+        <span class="field-label">Dossier</span>
+        <button id="noteFolderBtn" class="picker-btn" type="button"></button>
+
+        <span class="field-label">Adresse liée</span>
+        <button id="noteAddressBtn" class="picker-btn" type="button"></button>
+
+        <span class="field-label">Photos</span>
+        <input id="noteImages" type="file" accept="image/*" multiple hidden>
+        <div id="imagePreview" class="image-grid"></div>
+        <button id="addImagesBtn" class="secondary-btn" type="button">📷 Ajouter des photos</button>
+
+        <span class="field-label">Pièces jointes</span>
+        <input id="noteFiles" type="file" multiple hidden>
+        <div id="noteAttachments" class="attachments"></div>
+        <button id="addNoteFilesBtn" class="secondary-btn" type="button">📎 Joindre des fichiers</button>
+      </section>
+
+      <!-- CARNET D'ADRESSES -->
+      <section id="view-addresses" class="view" hidden>
+        <input id="addressSearch" class="search-input" type="search" placeholder="Rechercher un lieu" autocomplete="off" aria-label="Rechercher un lieu">
+        <div id="addressFilters" class="chip-row"></div>
+        <div id="addressList" class="list"></div>
+        <p id="addressesEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- FICHE D'UNE ADRESSE -->
+      <section id="view-address" class="view" hidden>
+        <div id="addressDetail"></div>
+      </section>
+
+      <!-- ÉDITION D'UNE ADRESSE -->
+      <section id="view-address-edit" class="view" hidden>
+        <label class="field-label" for="addrTitle">Nom du lieu</label>
+        <input id="addrTitle" type="text" class="text-input" placeholder="Ex. : Hôtel Gracery, Ichiran Shibuya...">
+
+        <span class="field-label">Catégorie</span>
+        <div id="addrCategories" class="chip-row wrap"></div>
+
+        <label class="field-label" for="addrAddress">Adresse</label>
+        <textarea id="addrAddress" class="text-area small" placeholder="Adresse complète, pour l'itinéraire Google Maps"></textarea>
+
+        <label class="field-label" for="addrAddressJa">Adresse en japonais <span class="optional">(facultatif)</span></label>
+        <textarea id="addrAddressJa" class="text-area small" lang="ja" placeholder="Pour la montrer à un chauffeur de taxi"></textarea>
+
+        <label class="field-label" for="addrPhone">Téléphone <span class="optional">(facultatif)</span></label>
+        <input id="addrPhone" type="tel" class="text-input" placeholder="+81 3-1234-5678">
+
+        <label class="field-label" for="addrWebsite">Site web <span class="optional">(facultatif)</span></label>
+        <input id="addrWebsite" type="url" inputmode="url" class="text-input" placeholder="https://...">
+
+        <label class="field-label" for="addrDesc">Description</label>
+        <textarea id="addrDesc" class="text-area md-input" placeholder="Horaires, code d'accès, plats à goûter... (mise en forme possible)"></textarea>
+
+        <span class="field-label">Pièces jointes</span>
+        <input id="addrFiles" type="file" multiple hidden>
+        <div id="addrAttachments" class="attachments"></div>
+        <button id="addAddrFilesBtn" class="secondary-btn" type="button">📎 Joindre des fichiers</button>
+      </section>
+
+      <!-- IMAGES : ALBUMS -->
+      <section id="view-albums" class="view view-wide" hidden>
+        <div id="albumGrid" class="album-grid"></div>
+        <p id="albumsEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- PHOTOS D'UN ALBUM -->
+      <section id="view-album" class="view view-wide" hidden>
+        <input id="albumPhotos" type="file" accept="image/*" multiple hidden>
+        <div id="photoGrid"></div>
+        <p id="albumEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- DOCUMENTS : dossiers et fichiers (ou contenu d'un dossier) -->
+      <section id="view-documents" class="view" hidden>
+        <input id="docFiles" type="file" multiple hidden>
+        <input id="docsSearch" class="search-input" type="search" placeholder="Rechercher un document" autocomplete="off" aria-label="Rechercher un document">
+        <div id="docsContent" class="list"></div>
+        <p id="docsEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- PARAMÈTRES -->
+      <section id="view-settings" class="view" hidden>
+        <h2 class="section-title">Apparence</h2>
+        <div id="themeChoice" class="segmented" role="radiogroup" aria-label="Thème">
+          <button class="segment" type="button" role="radio" data-theme-choice="auto">Automatique</button>
+          <button class="segment" type="button" role="radio" data-theme-choice="light">☀️ Clair</button>
+          <button class="segment" type="button" role="radio" data-theme-choice="dark">🌙 Sombre</button>
+        </div>
+        <p class="hint">« Automatique » suit le réglage du téléphone.</p>
+
+        <h2 class="section-title">Sauvegarde</h2>
+        <p class="hint">Enregistre toutes les notes, adresses, images et documents dans un seul fichier (sur le téléphone, Google Drive, iCloud Drive...), pour les retrouver après une réinstallation ou sur un autre téléphone, Android comme iPhone.</p>
+        <button id="backupBtn" class="secondary-btn block" type="button">💾 Créer une sauvegarde</button>
+        <input id="restoreInput" type="file" hidden>
+        <button id="restoreBtn" class="secondary-btn block" type="button">♻️ Restaurer une sauvegarde</button>
+
+        <h2 class="section-title">Stockage</h2>
+        <p id="storageInfo" class="hint"></p>
+        <p id="appVersion" class="hint"></p>
+        <p id="installInfo" class="hint" hidden>Pour installer SOHRI sur l'iPhone (plein écran, hors connexion)&nbsp;: dans Safari, touche Partager (ou ••• puis Partager), puis «&nbsp;Sur l'écran d'accueil&nbsp;». Les données de l'appli installée sont séparées de celles de Safari.</p>
+      </section>
+
+    </main>
+
+    <!-- BARRE DE MISE EN FORME (éditeurs) -->
+    <div id="mdToolbar" class="md-toolbar" hidden>
+      <button type="button" data-md="emoji" aria-label="Emoji">😀</button>
+      <button type="button" data-md="bold" aria-label="Gras"><b>B</b></button>
+      <button type="button" data-md="italic" aria-label="Italique"><i>I</i></button>
+      <button type="button" data-md="strike" aria-label="Barré"><s>S</s></button>
+      <button type="button" data-md="heading" aria-label="Titre">H</button>
+      <button type="button" data-md="bullet" aria-label="Liste à puces">•</button>
+      <button type="button" data-md="number" aria-label="Liste numérotée">1.</button>
+      <button type="button" data-md="task" aria-label="Case à cocher">☑</button>
+      <button type="button" data-md="quote" aria-label="Citation">❝</button>
+      <button type="button" data-md="code" aria-label="Code">&lt;/&gt;</button>
+      <button type="button" data-md="link" aria-label="Lien">🔗</button>
+      <button type="button" data-md="rule" aria-label="Séparateur">―</button>
+    </div>
+
+    <!-- BARRE DE SÉLECTION (photos d'un album) -->
+    <div id="selectionBar" class="selection-bar" hidden>
+      <button id="selectionCancelBtn" class="icon-btn" type="button" aria-label="Annuler la sélection">×</button>
+      <span id="selectionCount" class="selection-count"></span>
+      <button id="selectionMoveBtn" class="ghost-btn" type="button">Déplacer</button>
+      <button id="selectionDeleteBtn" class="primary-btn is-danger" type="button">Supprimer</button>
+    </div>
+  </div>
+
+  <!-- MENU DU BAS (actions, choix dans une liste, emojis) -->
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="sheet-panel" id="sheetPanel" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <!-- BOITE DE DIALOGUE (remplace alert/confirm/prompt) -->
+  <div id="dialog" class="dialog" hidden>
+    <div class="dialog-backdrop" id="dialogBackdrop"></div>
+    <div class="dialog-box" role="alertdialog" aria-modal="true" aria-labelledby="dialogTitle" aria-describedby="dialogMessage">
+      <p id="dialogTitle" class="dialog-title" hidden></p>
+      <p id="dialogMessage" class="dialog-message"></p>
+      <div id="dialogField" class="dialog-field" hidden>
+        <button id="dialogIconBtn" class="emoji-btn" type="button" aria-label="Choisir une icône" hidden></button>
+        <input id="dialogInput" class="text-input" type="text" autocomplete="off">
+      </div>
+      <div class="dialog-actions">
+        <button id="dialogCancelBtn" class="ghost-btn" type="button">Annuler</button>
+        <button id="dialogOkBtn" class="primary-btn" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROGRESSION (sauvegarde, ajout de photos...) -->
+  <div id="progress" class="dialog" hidden>
+    <div class="dialog-backdrop"></div>
+    <div class="dialog-box" role="status" aria-live="polite">
+      <p id="progressText" class="dialog-message"></p>
+      <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+    </div>
+  </div>
+
+  <!-- VISIONNEUSE DE PHOTOS -->
+  <div id="viewer" class="viewer" hidden>
+    <div id="viewerScroll" class="viewer-scroll">
+      <img id="viewerImg" alt="">
+    </div>
+    <div class="viewer-bar">
+      <button id="viewerCloseBtn" class="viewer-btn" type="button" aria-label="Fermer">×</button>
+      <span id="viewerCounter" class="viewer-counter"></span>
+      <span id="viewerActions" class="viewer-actions"></span>
+    </div>
+  </div>
+
+  <!-- VISIONNEUSE DE DOCUMENTS (PDF, image, vidéo, son, texte) -->
+  <div id="docViewer" class="doc-viewer" hidden>
+    <div class="doc-bar">
+      <button id="docCloseBtn" class="icon-btn" type="button" aria-label="Fermer">×</button>
+      <div class="doc-heading">
+        <p id="docName" class="doc-title"></p>
+        <p id="docInfo" class="doc-info"></p>
+      </div>
+      <button id="docShareBtn" class="icon-btn" type="button" aria-label="Partager" title="Partager">↗</button>
+      <button id="docMenuBtn" class="icon-btn" type="button" aria-label="Plus d'options" title="Plus d'options">⋮</button>
+    </div>
+    <div id="docBody" class="doc-body"></div>
+    <span id="docPage" class="doc-page" hidden></span>
+    <div id="docZoom" class="doc-zoom" hidden>
+      <button id="docZoomIn" type="button" aria-label="Agrandir">+</button>
+      <button id="docZoomOut" type="button" aria-label="Réduire">−</button>
+    </div>
+  </div>
+
+  <!-- ADRESSE POUR LE TAXI -->
+  <div id="taxi" class="taxi" hidden>
+    <button id="taxiCloseBtn" class="taxi-close" type="button" aria-label="Fermer">×</button>
+    <p class="taxi-request" lang="ja">この住所までお願いします。</p>
+    <p class="taxi-request-fr">« À cette adresse, s'il vous plaît. »</p>
+    <p id="taxiName" class="taxi-name"></p>
+    <p id="taxiAddress" class="taxi-address" lang="ja"></p>
+  </div>
+
+  <!-- BANDEAU (mise à jour disponible, astuce d'installation sur iPhone) -->
+  <div id="banner" class="banner" role="status" hidden>
+    <p id="bannerText" class="banner-text"></p>
+    <button id="bannerActionBtn" class="banner-action" type="button"></button>
+    <button id="bannerCloseBtn" class="banner-close" type="button" aria-label="Fermer">×</button>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="js/vendor/marked.umd.js"></script>
+<script src="js/db.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/router.js"></script>
+<script src="js/emoji.js"></script>
+<script src="js/markdown.js"></script>
+<script src="js/files.js"></script>
+<script src="js/docviewer.js"></script>
+<script src="js/folders.js"></script>
+<script src="js/converter.js"></script>
+<script src="js/notes.js"></script>
+<script src="js/addresses.js"></script>
+<script src="js/gallery.js"></script>
+<script src="js/documents.js"></script>
+<script src="js/backup.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

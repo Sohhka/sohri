@@ -1,0 +1,18 @@
+# Générés par Gradle / Android Studio
+android/.gradle/
+android/.kotlin/
+android/.idea/
+android/build/
+android/app/build/
+android/local.properties
+*.iml
+
+# APK générés
+dist/
+
+# Version web préparée par tools/build-web.js (refaite par GitHub à chaque envoi)
+_site/
+node_modules/
+
+# Clé de signature : à sauvegarder, mais jamais dans un dépôt partagé
+android/keystore/

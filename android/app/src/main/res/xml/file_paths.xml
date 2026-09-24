@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Seul dossier que l'appli peut confier à d'autres applis (ouvrir un PDF, partager une photo...) :
+     les fichiers transmis par la page, dans le cache. -->
+<paths>
+    <cache-path name="exports" path="exports/" />
+</paths>

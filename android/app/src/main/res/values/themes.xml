@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Sohri" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:colorPrimary">@color/app_accent</item>
+        <item name="android:colorAccent">@color/app_accent</item>
+    </style>
+</resources>

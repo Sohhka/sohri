@@ -1,0 +1,33 @@
+<!-- Torii (portail japonais), dessiné dans la zone sûre des icônes adaptatives. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.92"
+        android:scaleY="0.92">
+        <!-- Piliers -->
+        <path
+            android:fillColor="#C8402C"
+            android:pathData="M37.5,41.5h5.5v35h-5.5z M65,41.5h5.5v35h-5.5z" />
+        <!-- Traverse basse (nuki) -->
+        <path
+            android:fillColor="#C8402C"
+            android:pathData="M30,48.5h48v4h-48z" />
+        <!-- Traverse haute (shimaki) et montant central -->
+        <path
+            android:fillColor="#C8402C"
+            android:pathData="M32,38.5h44v4.5h-44z M51.5,43h5v5.5h-5z" />
+        <!-- Linteau supérieur incurvé (kasagi) -->
+        <path
+            android:fillColor="#1B2140"
+            android:pathData="M28,31 Q54,36.5 80,31 L78.5,37 Q54,40.5 29.5,37 Z" />
+        <!-- Socles -->
+        <path
+            android:fillColor="#1B2140"
+            android:pathData="M36.5,73.5h7.5v4h-7.5z M64,73.5h7.5v4h-7.5z" />
+    </group>
+</vector>

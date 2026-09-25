@@ -102,27 +102,31 @@ function checkFileStorage() {
 /* Copie hors connexion (voir sw.js), et nouvelles versions : proposées par un bandeau, installées
    en rechargeant l'appli. Seulement pour la version web : l'appli Android a déjà tous ses fichiers. */
 function registerServiceWorker() {
-  var hadController = !!navigator.serviceWorker.controller;
-  var reloading = false;
+  var updateRequested = false;
+  // Rechargée seulement à la demande (bouton « Mettre à jour ») : jamais au milieu d'une saisie.
   navigator.serviceWorker.addEventListener('controllerchange', function () {
-    if (hadController && !reloading) {
-      reloading = true;
+    if (updateRequested) {
+      updateRequested = false;
       location.reload();
     }
-    hadController = true;
   });
   navigator.serviceWorker.register('sw.js').then(function (registration) {
     function offerUpdate(worker) {
       showBanner('Une nouvelle version de SOHRI est disponible.', 'Mettre à jour', function () {
+        updateRequested = true;
         worker.postMessage('skipWaiting');
       });
     }
-    if (registration.waiting && navigator.serviceWorker.controller) offerUpdate(registration.waiting);
+    // Nouvelle version déjà téléchargée (lors d'une visite précédente), en attente.
+    if (registration.waiting && registration.active) offerUpdate(registration.waiting);
     registration.addEventListener('updatefound', function () {
       var worker = registration.installing;
-      if (!worker) return;
+      // Une mise à jour remplace une version active ; la toute première installation, non.
+      // (WebKit annonce l'installation alors que l'appli semble déjà prise en charge : on ne se
+      // fie pas à navigator.serviceWorker.controller.)
+      if (!worker || !registration.active) return;
       worker.addEventListener('statechange', function () {
-        if (worker.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(worker);
+        if (worker.state === 'installed') offerUpdate(worker);
       });
     });
     // L'appli installée reste souvent ouverte en arrière-plan : on vérifie à chaque retour.

@@ -1,8 +1,8 @@
 /* ---------- Base de données locale (IndexedDB) ---------- */
 var DB_NAME = 'travelAppDB';
-var DB_VERSION = 4;
+var DB_VERSION = 5;
 // Magasins des données de l'utilisateur (ceux des sauvegardes). Le partage (cloud.js) a les siens :
-// « cloud », « sharedAlbums », « sharedPhotos », jamais sauvegardés.
+// « cloud », « sharedAlbums », « sharedPhotos », « sharedComments », jamais sauvegardés.
 var DB_STORES = ['notes', 'addresses', 'settings', 'folders', 'photos', 'documents', 'documentFiles'];
 
 function openDB() {
@@ -45,6 +45,12 @@ function openDB() {
         var shared = db.createObjectStore('sharedPhotos', { keyPath: 'key' });
         shared.createIndex('owner', 'owner');
         shared.createIndex('albumKey', 'albumKey');
+      }
+      // Version 5 : commentaires des photos partagées (les miennes et celles des proches).
+      if (!db.objectStoreNames.contains('sharedComments')) {
+        var comments = db.createObjectStore('sharedComments', { keyPath: 'key' });
+        comments.createIndex('owner', 'owner');
+        comments.createIndex('photoKey', 'photoKey');
       }
     };
     req.onsuccess = function (e) {

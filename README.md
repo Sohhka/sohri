@@ -9,7 +9,8 @@ Appli pour un voyage au Japon, sur **Android** (APK) et sur **iPhone** (version 
   adresse. Export d'une note en fichier `.md`.
 - **Carnet d'adresses** par catégories (hébergement, restaurant, à visiter…) : itinéraire Google Maps,
   adresse en japonais à **montrer au chauffeur de taxi**, téléphone, site web, pièces jointes, notes liées.
-- **Images** : des albums (« Tokyo », « Shibuya »…) pour ranger ses photos, classées par jour de prise de vue.
+- **Images** : des albums (« Tokyo », « Shibuya »…) pour ranger ses photos, classées par jour de prise de
+  vue, avec une **description** par photo et, une fois partagées, les **commentaires** des proches.
 - **Documents** : tous ses fichiers (PDF, images, vidéos, sons, textes…) rangés dans des dossiers
   et **affichés directement dans l'appli**.
 - **Partage** (facultatif) : avec un compte, montrer ses **Images** aux proches de son choix, qui
@@ -22,7 +23,7 @@ contacte aucun serveur : l'accès à Internet ne sert qu'au partage entre proche
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-1.4.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+1. Copier `dist/Sohri-1.5.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
    télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
@@ -116,6 +117,22 @@ Sans compte, rien ne change : l'appli reste entièrement hors connexion. Avec un
 
 Ça marche entre la version web (iPhone) et l'appli Android : le compte est le même partout.
 
+### Descriptions et commentaires (façon Instagram)
+
+- **Description** : quand on ajoute une seule photo, l'appli propose d'en écrire une ; sinon, dans
+  la visionneuse, le bouton en bas de la photo ouvre sa fiche (« ✏️ Ajouter une description »).
+  Elle marche aussi sans compte ; si les Images sont partagées, les proches la voient sous la photo.
+- **Commentaires** : sur une photo partagée, tous ceux qui la voient peuvent commenter (bouton
+  « 💬 Commenter » sous la photo). **Répondre** prépare « @Prénom ». Chacun supprime ses propres
+  commentaires ; le propriétaire des photos peut supprimer n'importe lequel des leurs.
+- **Nouveautés** : pastille 💬 sur les photos commentées (rouge si nouveau), « 💬 2 nouveaux » sous
+  l'album, liste **Nouveaux commentaires** dans Partage, et un message à l'ouverture de l'appli.
+  (Pas de notification quand l'appli est fermée.)
+- **Hors connexion** : un commentaire écrit sans réseau part tout seul au retour d'Internet
+  (« ⏳ envoi au retour d'Internet ») ; les commentaires reçus restent lisibles sans réseau.
+- Supprimer une photo efface aussi ses commentaires ; arrêter le partage des Images efface les
+  photos **et** les commentaires du serveur.
+
 À savoir :
 
 - Seules les rubriques partagées quittent le téléphone. Arrêter tous les partages d'une rubrique
@@ -158,6 +175,7 @@ Sohri/
 │       ├── settings.js      Paramètres
 │       ├── cloud.js         partage : comptes, contacts, envoi et réception (API de Firebase)
 │       ├── sharing.js       partage : écrans (compte, contacts, albums reçus)
+│       ├── comments.js      fiche d'une photo : description et commentaires
 │       ├── cloud-config.js  projet Firebase (local, jamais dans le dépôt : voir plus bas)
 │       ├── app.js           menu, bouton retour, version web (hors connexion, mises à jour,
 │       │                    clavier de l'iPhone), démarrage
@@ -222,8 +240,8 @@ projet est dans OneDrive, les fichiers de compilation temporaires sont placés d
 `https://appassets.androidplatform.net/` (`WebViewAssetLoader`). Les données sont dans IndexedDB
 (magasins `notes`, `addresses`, `settings`, `folders` pour les dossiers et les albums, `photos`,
 `documents` pour la description des fichiers et `documentFiles` pour leur contenu ; pour le
-partage, hors sauvegardes : `cloud`, `sharedAlbums`, `sharedPhotos`). L'appli Android ajoute ce
-qu'une WebView ne fait pas seule :
+partage, hors sauvegardes : `cloud`, `sharedAlbums`, `sharedPhotos`, `sharedComments`). L'appli
+Android ajoute ce qu'une WebView ne fait pas seule :
 
 | Côté Android                               | Côté page (`window.AndroidBridge` et fonctions globales)                  |
 |--------------------------------------------|---------------------------------------------------------------------------|
@@ -262,10 +280,12 @@ Sans `window.AndroidBridge`, la page s'adapte (classe `is-web` sur `<html>`) :
 
 `cloud.js` utilise directement l'API web de Firebase (Authentication pour les comptes, Firestore
 pour les données), sans bibliothèque. En ligne, chacun a son espace `users/{id}` (nom, code,
-contacts, et ses albums partagés : `albums`, `photos` avec la miniature, `photoParts` pour la photo
-en morceaux de moins de 1 Mo) ; `grants/{propriétaire}_{proche}` liste les rubriques qu'un membre
-montre à un proche. Les suppressions laissent une trace datée : chaque téléphone ne demande que ce
-qui a changé depuis sa dernière visite.
+contacts, et ses albums partagés : `albums`, `photos` avec la miniature et la description,
+`photoParts` pour la photo en morceaux de moins de 1 Mo, `comments` pour les commentaires de ses
+photos, écrits par lui ou ses proches) ; `grants/{propriétaire}_{proche}` liste les rubriques qu'un
+membre montre à un proche. Les suppressions laissent une trace datée : chaque téléphone ne demande
+que ce qui a changé depuis sa dernière visite. Les commentaires écrits hors connexion attendent dans
+le magasin `sharedComments` (`pending`) jusqu'au retour du réseau.
 
 **Qui peut faire quoi** est décidé par le serveur, dans `firebase/firestore.rules` : chacun n'écrit
 que chez lui, ne lit que ce qu'on lui a partagé, et l'inscription demande le code d'un membre.

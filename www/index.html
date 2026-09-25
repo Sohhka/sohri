@@ -284,6 +284,12 @@
         <p id="sharedAlbumEmpty" class="empty" hidden></p>
       </section>
 
+      <!-- UNE PHOTO : DESCRIPTION ET COMMENTAIRES -->
+      <section id="view-photo" class="view" hidden>
+        <div id="photoDetail"></div>
+        <div id="photoComments" class="comments" aria-live="polite"></div>
+      </section>
+
     </main>
 
     <!-- BANDEAU (mise à jour disponible, astuce d'installation sur iPhone) : en bas de l'appli,
@@ -316,6 +322,12 @@
       <span id="selectionCount" class="selection-count"></span>
       <button id="selectionMoveBtn" class="ghost-btn" type="button">Déplacer</button>
       <button id="selectionDeleteBtn" class="primary-btn is-danger" type="button">Supprimer</button>
+    </div>
+
+    <!-- ÉCRIRE UN COMMENTAIRE (fiche d'une photo partagée) -->
+    <div id="commentBar" class="comment-bar" hidden>
+      <textarea id="commentInput" class="comment-input" rows="1" maxlength="1000" placeholder="Ajouter un commentaire…" aria-label="Commentaire"></textarea>
+      <button id="commentSendBtn" class="comment-send" type="button" disabled>Envoyer</button>
     </div>
   </div>
 
@@ -360,6 +372,11 @@
       <button id="viewerCloseBtn" class="viewer-btn" type="button" aria-label="Fermer">×</button>
       <span id="viewerCounter" class="viewer-counter"></span>
       <span id="viewerActions" class="viewer-actions"></span>
+    </div>
+    <!-- Photo d'un album : sa description et ses commentaires -->
+    <div id="viewerInfo" class="viewer-info" hidden>
+      <p id="viewerCaption" class="viewer-caption" hidden></p>
+      <button id="viewerInfoBtn" class="viewer-info-btn" type="button"></button>
     </div>
   </div>
 
@@ -412,6 +429,7 @@
 <script src="js/cloud-config.js"></script>
 <script src="js/cloud.js"></script>
 <script src="js/sharing.js"></script>
+<script src="js/comments.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

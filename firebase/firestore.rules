@@ -112,13 +112,35 @@ service cloud.firestore {
       match /photos/{photoId} {
         allow read: if canRead(uid, 'albums');
         allow create, update: if writesOwn(uid) && (tombstone(request.resource.data) || (
-          onlyKeys(request.resource.data, ['album', 'takenAt', 'width', 'height', 'thumb', 'parts', 'size', 'updatedAt'])
+          onlyKeys(request.resource.data, ['album', 'takenAt', 'width', 'height', 'thumb', 'parts', 'size', 'caption', 'updatedAt'])
           && validText(request.resource.data.album, 64)
           && request.resource.data.takenAt is int && request.resource.data.width is int && request.resource.data.height is int
           && request.resource.data.thumb is bytes && request.resource.data.thumb.size() <= 200000
           && request.resource.data.parts is int && request.resource.data.parts >= 1 && request.resource.data.parts <= 20
-          && request.resource.data.size is int && request.resource.data.updatedAt == request.time));
+          && request.resource.data.size is int && request.resource.data.updatedAt == request.time
+          && (!('caption' in request.resource.data) || validText(request.resource.data.caption, 2000))));
         allow delete: if signedIn() && uid == me();
+      }
+      // Commentaires des photos : par le propriétaire, ou par un proche qui voit ses Images, en son
+      // propre nom, sur une photo qui existe. Supprimés par leur auteur ou par le propriétaire des
+      // photos : il n'en reste qu'une trace datée (avec sa photo, effacée avec elle), pour que tout
+      // le monde les retire.
+      match /comments/{commentId} {
+        function commentTombstone(data) {
+          return onlyKeys(data, ['deleted', 'photo', 'updatedAt']) && data.deleted == true
+            && data.photo == resource.data.photo && data.updatedAt == request.time;
+        }
+        allow read: if canRead(uid, 'albums');
+        allow create: if canRead(uid, 'albums')
+          && onlyKeys(request.resource.data, ['photo', 'author', 'authorName', 'text', 'createdAt', 'updatedAt'])
+          && request.resource.data.author == me()
+          && validText(request.resource.data.authorName, 40)
+          && validText(request.resource.data.text, 1000)
+          && validText(request.resource.data.photo, 64)
+          && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(uid)/photos/$(request.resource.data.photo));
+        allow update: if signedIn() && (resource.data.author == me() || uid == me()) && commentTombstone(request.resource.data);
+        allow delete: if signedIn() && (uid == me() || resource.data.author == me());
       }
       match /photoParts/{partId} {
         allow read: if canRead(uid, 'albums');

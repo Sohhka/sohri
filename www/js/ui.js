@@ -52,6 +52,10 @@ function formatSize(bytes) {
 function plural(count, singular, pluralForm) {
   return count + ' ' + (count > 1 ? pluralForm : singular);
 }
+/* Texte sur plusieurs lignes (description, commentaire) : espaces et lignes vides en trop retirés. */
+function tidyText(text, max) {
+  return String(text || '').replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max);
+}
 /* Texte sans accents ni majuscules, pour la recherche. */
 function normalizeText(str) {
   return (str || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -347,10 +351,14 @@ var viewerScroll = byId('viewerScroll');
 var viewerItems = [];
 var viewerIndex = 0;
 var viewerSwipe = null;
+var viewerDetails = null;
 
-/* items : liste de Blob (ou d'URL) ; actions : boutons { icon, label, onClick(index) } en haut à droite. */
-function openViewer(items, index, actions) {
+/* items : liste de Blob (ou d'URL) ; actions : boutons { icon, label, onClick(index) } en haut à droite ;
+   details (albums) : { info(index) → { caption, label, unread }, open(index) } : description en bas
+   de la photo et bouton (commentaires...) qui ouvre la fiche de la photo. */
+function openViewer(items, index, actions, details) {
   viewerItems = items.slice();
+  viewerDetails = details || null;
   var actionsEl = byId('viewerActions');
   actionsEl.innerHTML = '';
   (actions || []).forEach(function (action) {
@@ -375,6 +383,27 @@ function viewerShow(index, direction) {
     void viewerImg.offsetWidth; // relance l'animation
     viewerImg.classList.add(direction > 0 ? 'slide-next' : 'slide-prev');
   }
+  updateViewerDetails();
+}
+
+/* Description et bouton en bas de la photo affichée. */
+function updateViewerDetails() {
+  var info = viewerDetails ? viewerDetails.info(viewerIndex) || {} : {};
+  byId('viewerCaption').textContent = info.caption || '';
+  byId('viewerCaption').hidden = !info.caption;
+  byId('viewerInfoBtn').textContent = info.label || '';
+  byId('viewerInfoBtn').hidden = !info.label;
+  byId('viewerInfoBtn').classList.toggle('is-unread', !!info.unread);
+  byId('viewerInfo').hidden = !info.caption && !info.label;
+  viewerEl.classList.toggle('has-info', !byId('viewerInfo').hidden);
+}
+
+function openViewerDetails() {
+  var details = viewerDetails;
+  var index = viewerIndex;
+  if (!details) return;
+  closeViewer();
+  details.open(index);
 }
 
 /* Remplace une image de la visionneuse (photo reçue en taille réelle, par exemple). */
@@ -395,8 +424,18 @@ function closeViewer() {
   viewerEl.hidden = true;
   viewerImg.removeAttribute('src');
   viewerItems = [];
+  viewerDetails = null;
   releaseBlobUrls('viewer');
 }
+
+byId('viewerInfoBtn').addEventListener('click', function (e) {
+  e.stopPropagation();
+  openViewerDetails();
+});
+byId('viewerCaption').addEventListener('click', function (e) {
+  e.stopPropagation();
+  openViewerDetails();
+});
 
 viewerImg.addEventListener('click', function (e) {
   e.stopPropagation();

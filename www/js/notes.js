@@ -343,8 +343,11 @@ function openNoteEditor(params) {
     };
     if (!folderMap[noteDraft.folderId]) noteDraft.folderId = null;
     if (!addrMap[noteDraft.addressId]) noteDraft.addressId = null;
-    byId('noteTitle').value = note ? note.title || '' : '';
-    byId('noteBody').value = note ? note.body || '' : '';
+    // Nouvelle note : les champs, vidés à l'ouverture, gardent ce qui a déjà pu être tapé.
+    if (note) {
+      byId('noteTitle').value = note.title || '';
+      byId('noteBody').value = note.body || '';
+    }
     currentImages = note && note.images ? note.images.slice() : [];
     currentAttachments = note && note.attachments ? note.attachments.slice() : [];
     renderImagePreview();
@@ -352,7 +355,7 @@ function openNoteEditor(params) {
     updateNoteDraftButtons(folderMap, addrMap);
     activeMarkdownField = byId('noteBody');
     autoGrow(byId('noteBody'));
-    noteFormSnapshot = noteFormState();
+    noteFormSnapshot = note ? noteFormState() : JSON.stringify(['', '', noteDraft.icon, noteDraft.folderId, noteDraft.addressId]);
   });
 }
 

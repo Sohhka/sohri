@@ -67,6 +67,8 @@ button:disabled { opacity: 0.55; }
    la partie visible de l'écran (--app-top, --app-height : voir app.js) et la page ne défile pas. */
 html.is-web, html.is-web body { overflow: hidden; overscroll-behavior: none; }
 html.is-web #app { position: fixed; left: 0; right: 0; top: var(--app-top, 0px); height: var(--app-height, 100%); }
+/* Boîtes de dialogue et menus du bas aussi : leur champ reste au-dessus du clavier. */
+html.is-web .dialog, html.is-web .sheet { top: var(--app-top, 0px); bottom: auto; height: var(--app-height, 100%); }
 
 /* iPhone, appli installée : la barre d'état (heure, batterie) s'affiche en blanc par-dessus l'appli ;
    une bande foncée derrière elle la garde lisible, même en thème clair. */
@@ -496,6 +498,57 @@ main {
 .account-form .text-input { margin-bottom: 2px; }
 .account-form .hint { margin-top: 6px; }
 .form-error { margin: 16px 2px 0; color: var(--danger); font-size: 0.92rem; line-height: 1.4; }
+.row-thumb { flex: 0 0 auto; width: 46px; height: 46px; object-fit: cover; border-radius: 8px; background: var(--divider); }
+.unread-count {
+  flex: 0 0 auto; min-width: 24px; padding: 2px 8px; border-radius: 100px;
+  background: var(--accent); color: #FFFFFF; font-size: 0.8rem; font-weight: 800; text-align: center;
+}
+
+/* ---------- Photo : description et commentaires ---------- */
+.photo-detail-img {
+  display: block; width: 100%; max-height: 62vh; object-fit: contain;
+  border-radius: 14px; background: #000000; cursor: zoom-in;
+}
+.caption-card { margin-top: 14px; }
+.caption-meta { margin: 0 0 6px; font-size: 0.82rem; color: var(--text-muted); }
+.caption-author { font-weight: 800; color: var(--text); }
+.caption-text { margin: 0; font-size: 1rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.caption-empty { margin: 0; }
+.caption-input { min-height: 110px; line-height: 1.5; }
+.caption-card .link-btn { margin-top: 4px; }
+.comments { margin-top: 6px; }
+.comment { padding: 10px 4px 6px; border-bottom: 1px solid var(--divider); }
+.comment.is-new { margin: 2px -6px; padding-left: 10px; padding-right: 10px; border-radius: 12px; background: var(--accent-soft); }
+.comment.is-pending { opacity: 0.6; }
+.comment-head { margin: 0 0 2px; font-size: 0.9rem; }
+.comment-author { font-weight: 800; }
+.comment-time { margin-left: 8px; font-size: 0.78rem; color: var(--text-muted); }
+.comment-text { margin: 0; font-size: 0.98rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment-actions { display: flex; gap: 16px; }
+.comment-actions .link-btn { padding: 6px 0; font-size: 0.82rem; }
+.muted-link { color: var(--text-muted); }
+.comment-bar {
+  display: flex; align-items: flex-end; gap: 8px; flex: 0 0 auto;
+  padding: 8px calc(var(--safe-right) + 10px) calc(var(--safe-bottom) + 8px) calc(var(--safe-left) + 10px);
+  background: var(--surface); border-top: 1px solid var(--divider);
+}
+.comment-input {
+  flex: 1; min-width: 0; height: 42px; max-height: 120px; padding: 10px 14px;
+  border: 1px solid var(--divider); border-radius: 21px; outline: none; resize: none;
+  background: var(--bg); color: var(--text); font-family: inherit; font-size: 1rem; line-height: 1.3;
+}
+.comment-input:focus { border-color: var(--accent); }
+.comment-send {
+  flex: 0 0 auto; height: 42px; padding: 0 16px; border: none; border-radius: 21px;
+  background: var(--accent); color: #FFFFFF; font-weight: 700; font-size: 0.92rem;
+}
+/* Pastille 💬 sur les miniatures, nouveaux commentaires sous les albums */
+.photo-badge {
+  position: absolute; right: 4px; bottom: 4px; padding: 1px 6px; border-radius: 100px;
+  background: rgba(0,0,0,0.62); color: #FFFFFF; font-size: 0.72rem; font-weight: 700; line-height: 1.5;
+}
+.photo-badge.is-unread { background: var(--accent); }
+.album-count.has-unread { color: var(--accent); font-weight: 700; }
 
 /* ---------- Paramètres ---------- */
 h2.section-title { font-size: 0.78rem; }
@@ -555,7 +608,7 @@ h2.section-title { font-size: 0.78rem; }
 .progress-bar { width: 0; height: 100%; background: var(--accent); transition: width 0.2s; }
 
 /* ---------- Visionneuse de photos ---------- */
-.viewer { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,0.94); }
+.viewer { position: fixed; inset: 0; z-index: 30; background: #000000; }
 .viewer-scroll {
   position: absolute; inset: 0; overflow: auto; display: flex;
   padding: calc(var(--safe-top) + 64px) calc(var(--safe-right) + 12px) calc(var(--safe-bottom) + 16px) calc(var(--safe-left) + 12px);
@@ -583,6 +636,22 @@ h2.section-title { font-size: 0.78rem; }
 }
 .viewer-counter { flex: 1; text-align: center; color: #fff; font-size: 0.9rem; font-weight: 600; pointer-events: none; }
 .viewer-actions { display: flex; gap: 8px; }
+/* Description et commentaires, en bas de la photo */
+.viewer-info {
+  position: absolute; left: 0; right: 0; bottom: 0; color: #FFFFFF;
+  padding: 32px calc(var(--safe-right) + 16px) calc(var(--safe-bottom) + 14px) calc(var(--safe-left) + 16px);
+  background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.78));
+}
+.viewer-caption {
+  margin: 0 0 10px; font-size: 0.95rem; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.viewer-info-btn {
+  padding: 9px 15px; border: none; border-radius: 100px;
+  background: rgba(255,255,255,0.18); color: #FFFFFF; font-weight: 700; font-size: 0.9rem;
+}
+.viewer-info-btn.is-unread { background: var(--accent); }
+.viewer.has-info .viewer-scroll { padding-bottom: calc(var(--safe-bottom) + 120px); }
 
 /* ---------- Adresse à montrer au chauffeur de taxi : noir sur blanc, quel que soit le thème ---------- */
 .taxi {

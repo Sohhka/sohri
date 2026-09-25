@@ -1,13 +1,14 @@
 /* ---------- Navigation entre les vues ----------
    Chaque vue est déclarée avec defineView(nom, {
      el:       id de la <section> à afficher,
-     section:  rubrique du menu mise en évidence,
+     section:  rubrique du menu mise en évidence (texte, ou fonction(params)),
      title:    titre (texte, ou fonction(params)),
      enter:    fonction(params) appelée à l'affichage (peut renvoyer une promesse),
      exit:     fonction(params) appelée quand la vue est fermée (libérer la mémoire...),
      canLeave: fonction(params) → promesse de booléen, pour confirmer avant de perdre une saisie,
      actions:  fonction(params) → boutons de la barre du haut { icon | text, label, onClick },
-     toolbar:  true (ou fonction) pour afficher la barre de mise en forme en bas
+     toolbar:  true (ou fonction) pour afficher la barre de mise en forme en bas,
+     commentBar: fonction(params) → true pour afficher la barre d'écriture d'un commentaire
    }).
    Les vues ouvertes forment une pile : ← (ou le bouton retour d'Android) revient à la précédente. */
 var VIEWS = {};
@@ -52,8 +53,10 @@ function updateBottomBars() {
   var entry = currentEntry();
   var def = entry && VIEWS[entry.name];
   var toolbar = !!(def && (typeof def.toolbar === 'function' ? def.toolbar(entry.params) : def.toolbar));
+  var commentBar = !!(def && def.commentBar && def.commentBar(entry.params));
   byId('mdToolbar').hidden = !toolbar;
-  byId('app').classList.toggle('has-bottom-bar', toolbar || !byId('selectionBar').hidden);
+  byId('commentBar').hidden = !commentBar;
+  byId('app').classList.toggle('has-bottom-bar', toolbar || commentBar || !byId('selectionBar').hidden);
 }
 
 function showCurrentView(restoreScroll) {
@@ -67,9 +70,10 @@ function showCurrentView(restoreScroll) {
   byId('navBtn').setAttribute('aria-label', nested ? 'Retour' : 'Menu');
   setViewTitle(typeof def.title === 'function' ? def.title(entry.params) : (def.title || ''));
   renderTopActions();
+  var section = typeof def.section === 'function' ? def.section(entry.params) : def.section;
   var items = document.querySelectorAll('.drawer-item');
   for (var j = 0; j < items.length; j++) {
-    if (items[j].dataset.section === def.section) items[j].setAttribute('aria-current', 'page');
+    if (items[j].dataset.section === section) items[j].setAttribute('aria-current', 'page');
     else items[j].removeAttribute('aria-current');
   }
   updateBottomBars();

@@ -3,6 +3,7 @@
    gardent une image réduite, une miniature et leur date de prise de vue. */
 var currentAlbum = null;
 var albumPhotos = [];          // photos de l'album affiché, par date de prise de vue
+var albumCommentStats = {};    // commentaires de ces photos (si elles sont partagées)
 var selectingPhotos = false;
 var selectedPhotoIds = {};
 var albumsRenderId = 0;
@@ -43,10 +44,11 @@ defineView('albums', {
 
 function renderAlbums() {
   var renderId = ++albumsRenderId;
-  return Promise.all([dbGetAll('folders'), dbGetAll('photos')]).then(function (results) {
+  return Promise.all([dbGetAll('folders'), dbGetAll('photos'), commentStats()]).then(function (results) {
     if (renderId !== albumsRenderId) return;
     releaseBlobUrls('albums');
     var albums = results[0].filter(isAlbum).sort(byName);
+    var stats = results[2];
     var photosByAlbum = {};
     results[1].forEach(function (photo) { (photosByAlbum[photo.albumId] = photosByAlbum[photo.albumId] || []).push(photo); });
     var grid = byId('albumGrid');
@@ -54,12 +56,13 @@ function renderAlbums() {
     albums.forEach(function (album) {
       var photos = (photosByAlbum[album.id] || []).sort(byTakenAt);
       var cover = photos[0];
+      var unread = photos.reduce(function (sum, p) { var s = stats[ownPhotoKey(p)]; return sum + (s ? s.unread : 0); }, 0);
       grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('album', { id: album.id }); } }, [
         h('span', { className: 'album-cover' }, cover
           ? h('img', { src: blobUrl('albums', cover.thumb || cover.blob), alt: '' })
           : h('span', { className: 'album-cover-icon', text: folderIcon(album) })),
         h('span', { className: 'album-name', text: folderLabel(album) }),
-        h('span', { className: 'album-count', text: plural(photos.length, 'photo', 'photos') })
+        h('span', { className: 'album-count' + (unread ? ' has-unread' : ''), text: plural(photos.length, 'photo', 'photos') + unreadSuffix(unread) })
       ]));
     });
     showEmpty(byId('albumsEmpty'), !albums.length, 'Aucun album pour l\'instant. Appuie sur + pour en créer un, par exemple « Tokyo ».');
@@ -88,10 +91,11 @@ defineView('album', {
 
 function renderAlbum(params) {
   var renderId = ++albumRenderId;
-  return Promise.all([dbGet('folders', params.id), dbGetAllByIndex('photos', 'albumId', params.id)]).then(function (results) {
+  return Promise.all([dbGet('folders', params.id), dbGetAllByIndex('photos', 'albumId', params.id), commentStats()]).then(function (results) {
     if (renderId !== albumRenderId) return;
     currentAlbum = results[0];
     albumPhotos = results[1].sort(byTakenAt);
+    albumCommentStats = results[2];
     if (!currentAlbum) {
       albumPhotos = [];
       renderPhotoGrid();
@@ -120,7 +124,10 @@ function renderPhotoGrid() {
     grid.appendChild(h('button', {
       type: 'button', className: 'photo-cell' + (selectedPhotoIds[photo.id] ? ' is-selected' : ''),
       'aria-label': 'Photo ' + (index + 1), dataset: { index: index }
-    }, [h('img', { src: blobUrl('album', photo.thumb || photo.blob), alt: '', loading: 'lazy' })]));
+    }, [
+      h('img', { src: blobUrl('album', photo.thumb || photo.blob), alt: '', loading: 'lazy' }),
+      selectingPhotos ? null : commentBadge(albumCommentStats[ownPhotoKey(photo)])
+    ]));
   });
   container.classList.toggle('selecting', selectingPhotos);
   showEmpty(byId('albumEmpty'), !albumPhotos.length, 'Album vide. Appuie sur + pour ajouter des photos.');
@@ -143,6 +150,14 @@ byId('photoGrid').addEventListener('click', function (e) {
 
 function openAlbumViewer(index) {
   var photos = albumPhotos.slice();
+  var shared = isSignedIn() && sharedWith('albums').length > 0;
+  var details = {
+    info: function (i) {
+      var stats = albumCommentStats[ownPhotoKey(photos[i])];
+      return { caption: photos[i].caption || '', label: commentLabel(stats, shared, !!photos[i].caption), unread: stats && stats.unread > 0 };
+    },
+    open: function (i) { openView('photo', { local: photos[i].id }); }
+  };
   openViewer(photos.map(function (p) { return p.blob; }), index, [
     { icon: '↗', label: 'Partager', onClick: function (i) { shareFile(photos[i].blob, photoFileName(photos[i])); } },
     {
@@ -161,17 +176,18 @@ function openAlbumViewer(index) {
         });
       }
     }
-  ]);
+  ], details);
 }
 
-/* Ajout de photos : une à une (réduction, miniature, date), avec une barre de progression. */
+/* Ajout de photos : une à une (réduction, miniature, date), avec une barre de progression.
+   Une seule photo : une description est proposée tout de suite (comme sur Instagram). */
 byId('albumPhotos').addEventListener('change', function (e) {
   var files = Array.prototype.slice.call(e.target.files || []);
   e.target.value = '';
   if (!files.length || !currentAlbum) return;
   var albumId = currentAlbum.id;
   var progress = showProgress('Ajout des photos…');
-  var added = 0;
+  var added = [];
   var failed = 0;
   files.reduce(function (chain, file, i) {
     return chain.then(function () {
@@ -179,8 +195,11 @@ byId('albumPhotos').addEventListener('change', function (e) {
       return preparePhoto(file).then(function (photo) {
         photo.albumId = albumId;
         photo.createdAt = Date.now();
-        return dbPut('photos', photo);
-      }).then(function () { added++; }, function (err) {
+        return dbPut('photos', photo).then(function (id) {
+          photo.id = id;
+          added.push(photo);
+        });
+      }).then(null, function (err) {
         console.error(err);
         failed++;
       });
@@ -190,11 +209,29 @@ byId('albumPhotos').addEventListener('change', function (e) {
     if (currentAlbum && currentAlbum.id === albumId) renderAlbum({ id: albumId });
     if (failed) {
       uiAlert(plural(failed, "photo n'a pas pu être ajoutée", "photos n'ont pas pu être ajoutées") + ' (format non pris en charge ou stockage plein).');
-    } else if (added) {
-      showToast(plural(added, 'photo ajoutée', 'photos ajoutées'));
+    } else if (added.length === 1) {
+      askPhotoCaption(added[0]);
+    } else if (added.length) {
+      showToast(plural(added.length, 'photo ajoutée', 'photos ajoutées'));
     }
   });
 });
+
+function askPhotoCaption(photo) {
+  uiPrompt('Photo ajoutée : une description ?', {
+    message: 'Facultatif. Quelques mots sur cette photo ; si tu partages tes Images, tes proches la verront et pourront commenter.',
+    placeholder: 'Ex. : premier soir à Shibuya 🌃', okLabel: 'Ajouter'
+  }).then(function (answer) {
+    if (!answer || !answer.value) return;
+    return setPhotoCaption(photo, answer.value).then(function () {
+      showToast('Description ajoutée');
+      if (currentAlbum && currentAlbum.id === photo.albumId) renderAlbum({ id: photo.albumId });
+    });
+  }).catch(function (err) {
+    console.error(err);
+    uiAlert("La description n'a pas pu être enregistrée.");
+  });
+}
 
 function showAlbumMenu() {
   var album = currentAlbum;

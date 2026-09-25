@@ -68,6 +68,7 @@ function showCurrentView(restoreScroll) {
   var nested = navStack.length > 1;
   byId('navBtn').textContent = nested ? '←' : '☰';
   byId('navBtn').setAttribute('aria-label', nested ? 'Retour' : 'Menu');
+  byId('navBtn').classList.toggle('is-back', nested);
   setViewTitle(typeof def.title === 'function' ? def.title(entry.params) : (def.title || ''));
   renderTopActions();
   var section = typeof def.section === 'function' ? def.section(entry.params) : def.section;

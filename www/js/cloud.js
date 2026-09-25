@@ -761,7 +761,7 @@ function reconcilePublished() {
     var records = [];
     r[0].forEach(function (a) { if (!a.deleted) records.push({ kind: 'album', rid: a._id, name: a.name, icon: a.icon }); });
     r[1].forEach(function (p) {
-      if (!p.deleted) records.push({ kind: 'photo', rid: p._id, album: p.album, parts: p.parts, caption: p.caption || '' });
+      if (!p.deleted) records.push({ kind: 'photo', rid: p._id, album: p.album, parts: p.parts, caption: p.caption || '', location: p.location || '' });
     });
     return Promise.all(records.map(savePublished));
   }).then(function () {
@@ -769,15 +769,18 @@ function reconcilePublished() {
   });
 }
 
-/* Liste des photos en ligne, sans les miniatures (album, morceaux, description, suppression). */
+/* Liste des photos en ligne, sans les miniatures (album, morceaux, description, lieu, suppression). */
 function fsListPhotoIndex(parent) {
   var all = [];
-  return fsChangesSince(parent, 'photos', null, function (docs) { all = all.concat(docs); }, ['album', 'parts', 'caption', 'deleted', 'updatedAt'])
+  return fsChangesSince(parent, 'photos', null, function (docs) { all = all.concat(docs); }, ['album', 'parts', 'caption', 'location', 'deleted', 'updatedAt'])
     .then(function () { return all; });
 }
 
 function photoCaption(photo) {
   return cloudText(photo.caption, 2000);
+}
+function photoLocation(photo) {
+  return cloudName(photo.location, 100);
 }
 
 function publishChanges(albums, photos, published) {
@@ -807,14 +810,18 @@ function publishChanges(albums, photos, published) {
     wanted[rid] = true;
     var done = published[rid];
     var caption = photoCaption(photo);
+    var location = photoLocation(photo);
     if (!done) uploads.push({ photo: photo, rid: rid, album: album });
-    else if (done.album !== album || (done.caption || '') !== caption) {
-      // Déplacée dans un autre album, ou description modifiée (effacée si vide).
+    else if (done.album !== album || (done.caption || '') !== caption || (done.location || '') !== location) {
+      // Déplacée dans un autre album, ou description / lieu modifiés (effacés si vides).
       tasks.push(function () {
-        var fields = caption ? { album: album, caption: caption } : { album: album };
-        return fsCommit([fsSet(me + '/photos/' + rid, fields, { mask: ['album', 'caption'], time: ['updatedAt'] })]).then(function () {
+        var fields = { album: album };
+        if (caption) fields.caption = caption;
+        if (location) fields.location = location;
+        return fsCommit([fsSet(me + '/photos/' + rid, fields, { mask: ['album', 'caption', 'location'], time: ['updatedAt'] })]).then(function () {
           done.album = album;
           done.caption = caption;
+          done.location = location;
           return savePublished(done);
         });
       });
@@ -875,10 +882,12 @@ function uploadPhoto(photo, rid, album) {
         thumb: r[1], parts: parts, size: bytes.length
       };
       var caption = photoCaption(photo);
+      var location = photoLocation(photo);
       if (caption) meta.caption = caption;
+      if (location) meta.location = location;
       writes.push(fsSet(me + '/photos/' + rid, meta, { time: ['updatedAt'] }));
       return fsCommit(writes).then(function () {
-        return savePublished({ kind: 'photo', rid: rid, album: album, parts: parts, caption: caption });
+        return savePublished({ kind: 'photo', rid: rid, album: album, parts: parts, caption: caption, location: location });
       });
     });
   });
@@ -996,7 +1005,7 @@ function receiveAlbums(owner) {
               tx.objectStore('sharedPhotos').put({
                 key: id, owner: owner, rid: doc._id, albumKey: owner + '/' + doc.album,
                 takenAt: doc.takenAt, width: doc.width, height: doc.height, parts: doc.parts, size: doc.size,
-                caption: doc.caption || '',
+                caption: doc.caption || '', location: doc.location || '',
                 thumb: new Blob([doc.thumb], { type: 'image/jpeg' }),
                 blob: old && old.size === doc.size ? old.blob : null
               });
@@ -1097,7 +1106,10 @@ function syncComments() {
 }
 
 /* Commentaires modifiés depuis la dernière fois : promesse du nombre de nouveaux (d'un autre).
-   La toute première fois (nouvel appareil, reconnexion), rien n'est « nouveau ». */
+   La toute première fois (nouvel appareil, reconnexion, mise à jour de l'appli), seuls ceux des
+   deux dernières semaines sont « nouveaux ». */
+var RECENT_COMMENT = 14 * 86400000;
+
 function receiveComments(owner) {
   var key = 'com:' + owner;
   var fresh = 0;
@@ -1118,12 +1130,14 @@ function receiveComments(owner) {
               return;
             }
             var old = existing[i];
-            var unread = old ? !!old.unread : !first && doc.author !== cloudSession.uid;
+            var createdAt = serverTime(doc.createdAt);
+            var unread = old ? !!old.unread
+              : doc.author !== cloudSession.uid && (!first || Date.now() - createdAt < RECENT_COMMENT);
             if (!old && unread) fresh++;
             store.put({
               key: id, owner: owner, id: doc._id, photo: doc.photo, photoKey: owner + '/' + doc.photo,
               author: doc.author, authorName: doc.authorName, text: doc.text,
-              createdAt: serverTime(doc.createdAt), pending: false, unread: unread
+              createdAt: createdAt, pending: false, unread: unread
             });
           });
         }).then(function () {
@@ -1148,54 +1162,79 @@ function cloudPostComment(owner, photoRid, text) {
   };
   return dbPut('sharedComments', comment).then(function () {
     notifyCloud('comment', comment.photoKey);
-    return sendComment(comment).then(function () { return true; }, function (err) {
-      if (!err.retry) throw err;
-      return false; // hors connexion : envoyé à la prochaine synchronisation
+    return sendComment(comment).then(function () { return null; }, function (err) {
+      if (err.retry) return err.wait; // envoyé plus tard (sans réseau, ou avec la photo)
+      // Refusé pour de bon : le commentaire disparaît, son texte reste dans le champ.
+      return dbDelete('sharedComments', comment.key).then(function () {
+        notifyCloud('comment', comment.photoKey);
+        throw err;
+      });
     });
-  }).then(function (sent) {
-    comment.pending = !sent;
+  }).then(function (waiting) {
+    comment.pending = !!waiting;
+    comment.waiting = waiting || null;
+    if (waiting === 'photo') syncNow(); // la photo part tout de suite, et le commentaire avec elle
     return comment;
   });
 }
 
-/* Envoi d'un commentaire. Erreur avec retry : à réessayer plus tard (hors connexion, serveur
-   indisponible, ou ma propre photo pas encore envoyée). */
+/* Mes photos partent-elles de cet appareil ? Sinon (un autre appareil envoie mes Images), celles
+   d'ici ne sont pas en ligne : personne ne peut les voir ni les commenter. */
+function sharingOwnPhotosHere() {
+  return !!cloudSession && sharedWith('albums').length > 0 && !!cloudState.deviceId && albumsSource() === cloudState.deviceId;
+}
+
+/* Envoi d'un commentaire. Échec provisoire : err.retry, et err.wait = 'offline' (pas de réseau),
+   'server' (serveur indisponible) ou 'photo' (ma photo, pas encore envoyée). Échec définitif :
+   noté dans le commentaire (failed), qui reste affiché avec la raison. */
 function sendComment(comment) {
   var path = userPath(comment.owner) + '/comments/' + comment.id;
+  function later(err, wait) {
+    err.retry = true;
+    err.wait = wait;
+    throw err;
+  }
   return fsCommit([fsSet(path, { photo: comment.photo, author: comment.author, authorName: comment.authorName, text: comment.text },
     { time: ['createdAt', 'updatedAt'], create: true })])
     .then(null, function (err) {
-      if (err.cloud === 'offline' || err.cloud === 'server') {
-        err.retry = true;
-        throw err;
-      }
-      // Déjà arrivé (la réponse s'était perdue en route), ou refusé : photo retirée, accès retiré.
-      return fsGet(path).then(function (doc) { return !!doc && doc.author === comment.author; }, function () { return false; }).then(function (arrived) {
+      if (err.cloud === 'offline' || err.cloud === 'server') later(err, err.cloud);
+      // Refusé : déjà arrivé (la réponse s'était perdue en route), ou impossible.
+      return fsGet(path).then(function (doc) {
+        return !!doc && doc.author === comment.author;
+      }, function (e) {
+        if (e.cloud === 'offline' || e.cloud === 'server') later(e, e.cloud);
+        return false;
+      }).then(function (arrived) {
         if (arrived) return null;
-        if (comment.owner === cloudSession.uid) {
-          err.retry = true; // ma photo, tout juste ajoutée : elle part avec la prochaine synchronisation
-          throw err;
-        }
-        return dbDelete('sharedComments', comment.key).then(function () {
-          notifyCloud('comment', comment.photoKey);
-          throw userError("Ce commentaire n'a pas pu être envoyé : la photo n'est plus partagée.");
-        });
+        if (comment.owner === cloudSession.uid && sharingOwnPhotosHere()) later(err, 'photo'); // photo tout juste ajoutée
+        throw userError(comment.owner === cloudSession.uid
+          ? "Cette photo n'est pas en ligne : tes Images partagées partent d'un autre appareil."
+          : "Cette photo n'est plus partagée avec toi.");
       });
     })
     .then(function () {
-      return dbGet('sharedComments', comment.key);
-    })
-    .then(function (current) {
-      if (!current) return null;
-      current.pending = false;
-      return dbPut('sharedComments', current).then(function () { notifyCloud('comment', comment.photoKey); });
+      return updateComment(comment.key, { pending: false, waiting: null, failed: null });
+    }, function (err) {
+      return updateComment(comment.key, err.retry ? { waiting: err.wait } : { pending: false, waiting: null, failed: cloudErrorText(err) })
+        .then(function () { throw err; });
     });
 }
 
-/* Commentaires écrits hors connexion : envoyés au retour du réseau. */
+function updateComment(key, changes) {
+  return dbGet('sharedComments', key).then(function (current) {
+    if (!current) return null;
+    Object.keys(changes).forEach(function (k) { current[k] = changes[k]; });
+    return dbPut('sharedComments', current).then(function () {
+      notifyCloud('comment', current.photoKey);
+      return current;
+    });
+  });
+}
+
+/* Commentaires en attente (écrits hors connexion...) : envoyés dès que possible. */
 function sendPendingComments() {
   return dbGetAll('sharedComments').then(function (all) {
-    return all.filter(function (c) { return c.pending; }).reduce(function (chain, comment) {
+    return all.filter(function (c) { return c.pending && !c.failed; }).reduce(function (chain, comment) {
       return chain.then(function () {
         return sendComment(comment)['catch'](function (err) {
           if (err.cloud === 'offline') throw err; // la synchronisation s'arrête : plus de réseau
@@ -1208,7 +1247,7 @@ function sendPendingComments() {
 
 /* Supprime un commentaire (le sien, ou n'importe lequel sur ses propres photos). */
 function cloudDeleteComment(comment) {
-  var sent = comment.pending ? Promise.resolve() // jamais parti : rien à effacer en ligne
+  var sent = comment.pending || comment.failed ? Promise.resolve() // jamais arrivé : rien à effacer en ligne
     : fsCommit([fsSet(userPath(comment.owner) + '/comments/' + comment.id, { deleted: true, photo: comment.photo }, { time: ['updatedAt'] })]);
   return sent.then(function () {
     return dbDelete('sharedComments', comment.key);

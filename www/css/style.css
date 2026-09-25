@@ -383,7 +383,7 @@ main {
 .album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px 14px; }
 .album-card { display: flex; flex-direction: column; gap: 2px; padding: 0; border: none; background: none; color: var(--text); text-align: left; }
 .album-cover {
-  display: flex; align-items: center; justify-content: center; aspect-ratio: 1;
+  position: relative; display: flex; align-items: center; justify-content: center; aspect-ratio: 1;
   margin-bottom: 6px; border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow);
 }
 .album-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -509,12 +509,13 @@ main {
   display: block; width: 100%; max-height: 62vh; object-fit: contain;
   border-radius: 14px; background: #000000; cursor: zoom-in;
 }
+#photoDetail.is-editing .photo-detail-img { max-height: 26vh; }
 .caption-card { margin-top: 14px; }
 .caption-meta { margin: 0 0 6px; font-size: 0.82rem; color: var(--text-muted); }
 .caption-author { font-weight: 800; color: var(--text); }
 .caption-text { margin: 0; font-size: 1rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .caption-empty { margin: 0; }
-.caption-input { min-height: 110px; line-height: 1.5; }
+.caption-input { min-height: 84px; line-height: 1.5; }
 .caption-card .link-btn { margin-top: 4px; }
 .comments { margin-top: 6px; }
 .comment { padding: 10px 4px 6px; border-bottom: 1px solid var(--divider); }
@@ -549,6 +550,31 @@ main {
 }
 .photo-badge.is-unread { background: var(--accent); }
 .album-count.has-unread { color: var(--accent); font-weight: 700; }
+.album-badge {
+  position: absolute; top: 8px; right: 8px; padding: 3px 9px; border-radius: 100px;
+  background: var(--accent); color: #FFFFFF; font-size: 0.8rem; font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+/* Nouveaux commentaires : pastille dans le menu, point sur ☰ */
+.drawer-badge {
+  margin-left: auto; padding: 2px 8px; border-radius: 100px;
+  background: var(--accent); color: #FFFFFF; font-size: 0.78rem; font-weight: 800;
+}
+#navBtn { position: relative; }
+#navBtn.has-dot:not(.is-back)::after {
+  content: ""; position: absolute; top: 7px; right: 7px; width: 10px; height: 10px;
+  border: 2px solid var(--surface); border-radius: 50%; background: var(--accent);
+}
+/* Lieu d'une photo (📍), ouvre la carte */
+.location-link {
+  display: inline-flex; align-items: baseline; gap: 4px; margin: 0 0 6px; padding: 2px 0;
+  border: none; background: none; color: var(--accent); font-weight: 700; font-size: 0.95rem; text-align: left;
+}
+.location-pin { font-size: 0.9rem; }
+.caption-intro { margin: 0 0 4px; }
+.caption-card .field-label:first-of-type { margin-top: 10px; }
+.comment-failed { margin: 2px 0 0; font-size: 0.82rem; color: var(--danger); }
+.viewer-location { margin: 0 0 6px; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
 
 /* ---------- Paramètres ---------- */
 h2.section-title { font-size: 0.78rem; }

@@ -83,9 +83,11 @@ function renderSharing() {
         h('p', { className: 'list-row-title', text: grant.name }),
         h('p', { className: 'list-row-sub', text: grant.categories.map(categoryLabel).join(', ') })
       ]),
+      h('span', { className: 'unread-count', hidden: true, dataset: { ownerUnread: grant.owner } }), // nouveaux commentaires
       h('span', { className: 'row-chevron', text: '›' })
     ]));
   });
+  updateUnreadIndicators();
 
   box.appendChild(h('h2', { className: 'section-title', text: 'Ce que je partage' }));
   Object.keys(CLOUD_CATEGORIES).forEach(function (category) {
@@ -394,9 +396,12 @@ function renderSharedAlbums(params) {
       var photos = (byAlbum[album.key] || []).sort(function (a, b) { return (a.takenAt || 0) - (b.takenAt || 0); });
       var unread = photos.reduce(function (sum, p) { return sum + (r[2][p.key] ? r[2][p.key].unread : 0); }, 0);
       grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('shared-album', { owner: params.owner, album: album.key }); } }, [
-        h('span', { className: 'album-cover' }, photos[0]
-          ? h('img', { src: blobUrl('sharedAlbums', photos[0].thumb), alt: '' })
-          : h('span', { className: 'album-cover-icon', text: album.icon || '🖼️' })),
+        h('span', { className: 'album-cover' }, [
+          photos[0]
+            ? h('img', { src: blobUrl('sharedAlbums', photos[0].thumb), alt: '' })
+            : h('span', { className: 'album-cover-icon', text: album.icon || '🖼️' }),
+          albumBadge(unread)
+        ]),
         h('span', { className: 'album-name', text: (album.icon ? album.icon + ' ' : '') + album.name }),
         h('span', { className: 'album-count' + (unread ? ' has-unread' : ''), text: plural(photos.length, 'photo', 'photos') + unreadSuffix(unread) })
       ]));
@@ -468,7 +473,7 @@ byId('sharedPhotoGrid').addEventListener('click', function (e) {
   ], {
     info: function (i) {
       var stats = sharedAlbumStats[photos[i].key];
-      return { caption: photos[i].caption || '', label: commentLabel(stats, true, false), unread: stats && stats.unread > 0 };
+      return { caption: photos[i].caption || '', location: photos[i].location || '', label: commentLabel(stats, true, false), unread: stats && stats.unread > 0 };
     },
     open: function (i) { openView('photo', { owner: photos[i].owner, rid: photos[i].rid }); }
   });

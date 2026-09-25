@@ -58,9 +58,12 @@ function renderAlbums() {
       var cover = photos[0];
       var unread = photos.reduce(function (sum, p) { var s = stats[ownPhotoKey(p)]; return sum + (s ? s.unread : 0); }, 0);
       grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('album', { id: album.id }); } }, [
-        h('span', { className: 'album-cover' }, cover
-          ? h('img', { src: blobUrl('albums', cover.thumb || cover.blob), alt: '' })
-          : h('span', { className: 'album-cover-icon', text: folderIcon(album) })),
+        h('span', { className: 'album-cover' }, [
+          cover
+            ? h('img', { src: blobUrl('albums', cover.thumb || cover.blob), alt: '' })
+            : h('span', { className: 'album-cover-icon', text: folderIcon(album) }),
+          albumBadge(unread)
+        ]),
         h('span', { className: 'album-name', text: folderLabel(album) }),
         h('span', { className: 'album-count' + (unread ? ' has-unread' : ''), text: plural(photos.length, 'photo', 'photos') + unreadSuffix(unread) })
       ]));
@@ -150,11 +153,15 @@ byId('photoGrid').addEventListener('click', function (e) {
 
 function openAlbumViewer(index) {
   var photos = albumPhotos.slice();
-  var shared = isSignedIn() && sharedWith('albums').length > 0;
+  var shared = sharingOwnPhotosHere(); // mes photos sont en ligne depuis cet appareil
   var details = {
     info: function (i) {
       var stats = albumCommentStats[ownPhotoKey(photos[i])];
-      return { caption: photos[i].caption || '', label: commentLabel(stats, shared, !!photos[i].caption), unread: stats && stats.unread > 0 };
+      var p = photos[i];
+      return {
+        caption: p.caption || '', location: p.location || '',
+        label: commentLabel(stats, shared, !!(p.caption || p.location)), unread: stats && stats.unread > 0
+      };
     },
     open: function (i) { openView('photo', { local: photos[i].id }); }
   };
@@ -180,7 +187,8 @@ function openAlbumViewer(index) {
 }
 
 /* Ajout de photos : une à une (réduction, miniature, date), avec une barre de progression.
-   Une seule photo : une description est proposée tout de suite (comme sur Instagram). */
+   Une seule photo : sa fiche s'ouvre pour lui donner une description et un lieu (comme sur
+   Instagram ; les deux sont facultatifs). */
 byId('albumPhotos').addEventListener('change', function (e) {
   var files = Array.prototype.slice.call(e.target.files || []);
   e.target.value = '';
@@ -210,28 +218,13 @@ byId('albumPhotos').addEventListener('change', function (e) {
     if (failed) {
       uiAlert(plural(failed, "photo n'a pas pu être ajoutée", "photos n'ont pas pu être ajoutées") + ' (format non pris en charge ou stockage plein).');
     } else if (added.length === 1) {
-      askPhotoCaption(added[0]);
+      if (currentAlbum && currentAlbum.id === albumId) openView('photo', { local: added[0].id, edit: true });
+      else showToast('1 photo ajoutée');
     } else if (added.length) {
       showToast(plural(added.length, 'photo ajoutée', 'photos ajoutées'));
     }
   });
 });
-
-function askPhotoCaption(photo) {
-  uiPrompt('Photo ajoutée : une description ?', {
-    message: 'Facultatif. Quelques mots sur cette photo ; si tu partages tes Images, tes proches la verront et pourront commenter.',
-    placeholder: 'Ex. : premier soir à Shibuya 🌃', okLabel: 'Ajouter'
-  }).then(function (answer) {
-    if (!answer || !answer.value) return;
-    return setPhotoCaption(photo, answer.value).then(function () {
-      showToast('Description ajoutée');
-      if (currentAlbum && currentAlbum.id === photo.albumId) renderAlbum({ id: photo.albumId });
-    });
-  }).catch(function (err) {
-    console.error(err);
-    uiAlert("La description n'a pas pu être enregistrée.");
-  });
-}
 
 function showAlbumMenu() {
   var album = currentAlbum;

@@ -389,12 +389,14 @@ function viewerShow(index, direction) {
 /* Description et bouton en bas de la photo affichée. */
 function updateViewerDetails() {
   var info = viewerDetails ? viewerDetails.info(viewerIndex) || {} : {};
+  byId('viewerLocation').textContent = info.location ? '📍 ' + info.location : '';
+  byId('viewerLocation').hidden = !info.location;
   byId('viewerCaption').textContent = info.caption || '';
   byId('viewerCaption').hidden = !info.caption;
   byId('viewerInfoBtn').textContent = info.label || '';
   byId('viewerInfoBtn').hidden = !info.label;
   byId('viewerInfoBtn').classList.toggle('is-unread', !!info.unread);
-  byId('viewerInfo').hidden = !info.caption && !info.label;
+  byId('viewerInfo').hidden = !info.caption && !info.location && !info.label;
   viewerEl.classList.toggle('has-info', !byId('viewerInfo').hidden);
 }
 
@@ -433,6 +435,10 @@ byId('viewerInfoBtn').addEventListener('click', function (e) {
   openViewerDetails();
 });
 byId('viewerCaption').addEventListener('click', function (e) {
+  e.stopPropagation();
+  openViewerDetails();
+});
+byId('viewerLocation').addEventListener('click', function (e) {
   e.stopPropagation();
   openViewerDetails();
 });

@@ -112,13 +112,14 @@ service cloud.firestore {
       match /photos/{photoId} {
         allow read: if canRead(uid, 'albums');
         allow create, update: if writesOwn(uid) && (tombstone(request.resource.data) || (
-          onlyKeys(request.resource.data, ['album', 'takenAt', 'width', 'height', 'thumb', 'parts', 'size', 'caption', 'updatedAt'])
+          onlyKeys(request.resource.data, ['album', 'takenAt', 'width', 'height', 'thumb', 'parts', 'size', 'caption', 'location', 'updatedAt'])
           && validText(request.resource.data.album, 64)
           && request.resource.data.takenAt is int && request.resource.data.width is int && request.resource.data.height is int
           && request.resource.data.thumb is bytes && request.resource.data.thumb.size() <= 200000
           && request.resource.data.parts is int && request.resource.data.parts >= 1 && request.resource.data.parts <= 20
           && request.resource.data.size is int && request.resource.data.updatedAt == request.time
-          && (!('caption' in request.resource.data) || validText(request.resource.data.caption, 2000))));
+          && (!('caption' in request.resource.data) || validText(request.resource.data.caption, 2000))
+          && (!('location' in request.resource.data) || validText(request.resource.data.location, 100))));
         allow delete: if signedIn() && uid == me();
       }
       // Commentaires des photos : par le propriétaire, ou par un proche qui voit ses Images, en son

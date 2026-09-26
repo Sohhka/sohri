@@ -12,7 +12,7 @@ var commentInput = byId('commentInput');
 
 defineView('photo', {
   el: 'view-photo',
-  section: function (params) { return params.local !== undefined ? 'albums' : params.from || 'sharing'; },
+  section: 'albums', // mes photos comme celles des proches : rubrique Images
   title: 'Photo',
   enter: renderPhotoDetail,
   exit: function () {
@@ -377,21 +377,16 @@ function unreadCounts() {
   });
 }
 
-/* Pastilles du menu et point sur ☰ : visibles de partout. Images compte tout (mes photos, et celles
-   des proches, accessibles par son bandeau) ; Partage, les photos des proches. */
-var drawerBadges = {};
-['albums', 'sharing'].forEach(function (section) {
-  var item = document.querySelector('.drawer-item[data-section="' + section + '"]');
-  drawerBadges[section] = item.appendChild(h('span', { className: 'drawer-badge', hidden: true }));
-});
+/* Pastille du menu (rubrique Images : mes photos et celles des proches) et point sur ☰ : visibles
+   de partout. */
+var imagesBadge = document.querySelector('.drawer-item[data-section="albums"]').appendChild(h('span', { className: 'drawer-badge', hidden: true }));
 
 function updateUnreadIndicators() {
   return unreadCounts().then(function (counts) {
-    [['albums', counts.mine + counts.others], ['sharing', counts.others]].forEach(function (pair) {
-      drawerBadges[pair[0]].textContent = pair[1] ? '💬 ' + pair[1] : '';
-      drawerBadges[pair[0]].hidden = !pair[1];
-    });
-    byId('navBtn').classList.toggle('has-dot', counts.mine + counts.others > 0);
+    var total = counts.mine + counts.others;
+    imagesBadge.textContent = total ? '💬 ' + total : '';
+    imagesBadge.hidden = !total;
+    byId('navBtn').classList.toggle('has-dot', total > 0);
     var rows = document.querySelectorAll('[data-owner-unread]');
     for (var i = 0; i < rows.length; i++) {
       var n = counts.byOwner[rows[i].dataset.ownerUnread] || 0;
@@ -401,16 +396,21 @@ function updateUnreadIndicators() {
   });
 }
 
-/* Écran Partage : les photos qui ont de nouveaux commentaires. */
-function renderUnreadComments(container) {
-  if (!isSignedIn()) return;
-  Promise.all([dbGetAll('sharedComments'), dbGetAll('photos')]).then(function (r) {
+/* En haut de la rubrique Images : les photos (les miennes et celles des proches) qui ont de
+   nouveaux commentaires ; rien quand il n'y en a pas. group : adresses des miniatures. */
+function renderUnreadComments(container, group) {
+  if (!isSignedIn()) {
+    container.innerHTML = '';
+    return Promise.resolve();
+  }
+  return Promise.all([dbGetAll('sharedComments'), dbGetAll('photos')]).then(function (r) {
     var byPhoto = {};
     r[0].forEach(function (c) { if (c.unread) (byPhoto[c.photoKey] = byPhoto[c.photoKey] || []).push(c); });
     var keys = Object.keys(byPhoto);
     var own = {};
     r[1].forEach(function (p) { var key = ownPhotoKey(p); if (key && byPhoto[key]) own[key] = p; });
     return Promise.all(keys.map(function (key) { return own[key] ? null : dbGet('sharedPhotos', key); })).then(function (shared) {
+      releaseBlobUrls(group);
       container.innerHTML = '';
       var rows = [];
       keys.forEach(function (key, i) {
@@ -419,7 +419,7 @@ function renderUnreadComments(container) {
         var list = byPhoto[key].sort(function (a, b) { return a.createdAt - b.createdAt; });
         var last = list[list.length - 1];
         var params = own[key] ? { local: photo.id } : { owner: photo.owner, rid: photo.rid };
-        var thumb = own[key] ? photoThumbImage(photo, 'sharing') : sharedThumbImage(photo, 'sharing');
+        var thumb = own[key] ? photoThumbImage(photo, group) : sharedThumbImage(photo, group);
         thumb.className = 'row-thumb';
         rows.push({ at: last.createdAt, row: h('div', { className: 'list-row', onclick: function () { openView('photo', params); } }, [
           thumb,
@@ -463,9 +463,6 @@ function scheduleCommentRefresh() {
       if (!isSelectingPhotos() && byId('viewer').hidden) (view === 'album' ? renderAlbum : renderAlbums)(currentEntry().params);
     } else if (view === 'shared-album' || view === 'shared-albums') {
       scheduleSharedRender();
-    } else if (view === 'sharing') {
-      var box = byId('unreadComments');
-      if (box) renderUnreadComments(box);
     }
   }, 500);
 }

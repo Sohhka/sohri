@@ -385,6 +385,8 @@ main {
    beaucoup de monde, il défile de côté jusqu'aux bords de l'écran (le suivant dépasse : on voit
    qu'il y en a d'autres), sans faire défiler la page. */
 .shared-strip { margin-bottom: 6px; }
+.album-news:not(:empty) { margin-bottom: 8px; }
+.images-hint .link-btn { padding: 0; font-size: inherit; }
 .shared-strip-row {
   display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain;
   padding: 6px 20px 8px; margin: 0 -20px; scrollbar-width: none;

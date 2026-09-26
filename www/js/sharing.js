@@ -70,25 +70,14 @@ function renderSharing() {
   box.appendChild(h('p', { className: 'cloud-status js-cloud-status' }));
   updateStatusLine();
 
-  var unread = box.appendChild(h('div', { id: 'unreadComments' }));
-  renderUnreadComments(unread);
-
-  box.appendChild(h('h2', { className: 'section-title', text: 'Partagés avec moi' }));
-  if (!cloudState.grantsToMe.length) {
-    box.appendChild(h('p', { className: 'hint', text: 'Personne ne partage encore avec toi.' }));
-  }
-  cloudState.grantsToMe.forEach(function (grant) {
-    box.appendChild(h('div', { className: 'list-row', onclick: function () { openView('shared-albums', { owner: grant.owner }); } }, [
-      h('span', { className: 'row-icon', text: '👤' }),
-      h('div', { className: 'list-row-main' }, [
-        h('p', { className: 'list-row-title', text: grant.name }),
-        h('p', { className: 'list-row-sub', text: grant.categories.map(categoryLabel).join(', ') })
-      ]),
-      h('span', { className: 'unread-count', hidden: true, dataset: { ownerUnread: grant.owner } }), // nouveaux commentaires
-      h('span', { className: 'row-chevron', text: '›' })
+  // Les photos des proches (et leurs nouveaux commentaires) sont dans la rubrique Images.
+  var givers = cloudState.grantsToMe.filter(function (g) { return g.categories.indexOf('albums') >= 0; });
+  if (givers.length) {
+    box.appendChild(h('p', { className: 'hint images-hint' }, [
+      '🖼️ Les Images de ' + givers.map(function (g) { return g.name; }).join(', ') + ' sont en haut de la rubrique Images. ',
+      h('button', { type: 'button', className: 'link-btn', text: 'Ouvrir Images', onclick: function () { goToSection('albums'); } })
     ]));
-  });
-  updateUnreadIndicators();
+  }
 
   box.appendChild(h('h2', { className: 'section-title', text: 'Ce que je partage' }));
   Object.keys(CLOUD_CATEGORIES).forEach(function (category) {
@@ -370,15 +359,10 @@ function ownerName(owner) {
   return grant ? grant.name : 'Un proche';
 }
 
-/* params.from : 'albums' quand on vient du bandeau de la rubrique Images (elle reste en évidence
-   dans le menu), sinon on vient de l'écran Partage. */
-function sharedSection(params) {
-  return params.from || 'sharing';
-}
-
+/* Les photos des proches font partie de la rubrique Images (on y arrive par son bandeau). */
 defineView('shared-albums', {
   el: 'view-shared-albums',
-  section: sharedSection,
+  section: 'albums',
   title: function (params) { return 'Images de ' + ownerName(params.owner); },
   enter: function (params) {
     markSharedSeen(params.owner);
@@ -406,7 +390,7 @@ function renderSharedAlbums(params) {
     r[0].sort(byName).forEach(function (album) {
       var photos = (byAlbum[album.key] || []).sort(function (a, b) { return (a.takenAt || 0) - (b.takenAt || 0); });
       var unread = photos.reduce(function (sum, p) { return sum + (r[2][p.key] ? r[2][p.key].unread : 0); }, 0);
-      grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('shared-album', { owner: params.owner, album: album.key, from: params.from }); } }, [
+      grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('shared-album', { owner: params.owner, album: album.key }); } }, [
         h('span', { className: 'album-cover' }, [
           photos[0]
             ? sharedThumbImage(photos[0], 'sharedAlbums')
@@ -467,7 +451,7 @@ function renderSharedStrip(people, group) {
     var sub = person.fresh ? plural(person.fresh, 'nouvelle', 'nouvelles') : person.count ? plural(person.count, 'photo', 'photos') : 'Rien encore';
     return h('button', {
       type: 'button', className: 'person-tile', 'aria-label': 'Images de ' + person.name + ' (' + sub + ')',
-      onclick: function () { openView('shared-albums', { owner: person.owner, from: 'albums' }); }
+      onclick: function () { openView('shared-albums', { owner: person.owner }); }
     }, [
       h('span', { className: 'person-avatar' + (person.fresh ? ' has-new' : '') }, [
         person.cover ? sharedThumbImage(person.cover, group) : h('span', { className: 'person-emoji', text: '👤' }),
@@ -489,7 +473,7 @@ function sharedInfoText(photos) {
 
 defineView('shared-album', {
   el: 'view-shared-album',
-  section: sharedSection,
+  section: 'albums',
   title: 'Album',
   enter: renderSharedAlbum,
   exit: function () { releaseBlobUrls('sharedAlbum'); }
@@ -534,7 +518,6 @@ byId('sharedPhotoGrid').addEventListener('click', function (e) {
   if (!cell) return;
   var photos = sharedAlbumPhotos.slice();
   var index = parseInt(cell.dataset.index, 10);
-  var from = currentEntry().params.from;
   openViewer(photos.map(function (p) { return p.blob || p.thumb; }), index, [
     { icon: '↗', label: 'Partager', onClick: function (i) {
       if (photos[i].blob) shareFile(photos[i].blob, photoFileName(photos[i]));
@@ -545,7 +528,7 @@ byId('sharedPhotoGrid').addEventListener('click', function (e) {
       var stats = sharedAlbumStats[photos[i].key];
       return { caption: photos[i].caption || '', location: photos[i].location || '', label: commentLabel(stats, true, false), unread: stats && stats.unread > 0 };
     },
-    open: function (i) { openView('photo', { owner: photos[i].owner, rid: photos[i].rid, from: from }); },
+    open: function (i) { openView('photo', { owner: photos[i].owner, rid: photos[i].rid }); },
     // Photo qui ne s'affiche pas : relue dans la base, puis (celle enregistrée étant sans doute
     // abîmée) téléchargée de nouveau.
     reload: function (i, attempt) {

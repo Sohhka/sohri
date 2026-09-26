@@ -34,7 +34,10 @@ defineView('albums', {
   section: 'albums',
   title: 'Images',
   enter: renderAlbums,
-  exit: function () { releaseBlobUrls('albums'); },
+  exit: function () {
+    releaseBlobUrls('albums');
+    releaseBlobUrls('albumNews');
+  },
   actions: function () {
     return [{ icon: '+', label: 'Nouvel album', onClick: function () {
       createFolder('photos').then(function (album) { if (album) openView('album', { id: album.id }); });
@@ -47,7 +50,9 @@ function renderAlbums() {
   return Promise.all([dbGetAll('folders'), dbGetAll('photos'), commentStats(), sharedPeople()]).then(function (results) {
     if (renderId !== albumsRenderId) return;
     releaseBlobUrls('albums');
-    // En haut, les proches qui me partagent leurs Images (accès direct), puis mes albums.
+    // En haut, les nouveaux commentaires (s'il y en a), les proches qui me partagent leurs Images
+    // (accès direct), puis mes albums.
+    renderUnreadComments(byId('albumNews'), 'albumNews');
     renderSharedStrip(results[3], 'albums');
     byId('myAlbumsTitle').hidden = !results[3].length;
     var albums = results[0].filter(isAlbum).sort(byName);

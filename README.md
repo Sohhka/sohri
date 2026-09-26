@@ -115,9 +115,10 @@ Sans compte, rien ne change : l'appli reste entièrement hors connexion. Avec un
 4. Chez le proche, en haut de la rubrique **Images**, un bandeau **Mes proches** (façon
    « stories ») montre ceux qui lui partagent leurs photos : leur photo la plus récente en rond,
    avec un anneau de couleur et « 3 nouvelles » s'il y en a depuis sa dernière visite, et 💬 pour
-   les nouveaux commentaires. Un appui ouvre leurs albums (aussi accessibles par Partage →
-   **Partagés avec moi**). Ils sont copiés sur son téléphone et restent consultables **hors
-   connexion** ; les nouveautés arrivent quand il ouvre l'appli avec Internet.
+   les nouveaux commentaires. Un appui ouvre leurs albums. Ils sont copiés sur son téléphone et
+   restent consultables **hors connexion** ; les nouveautés arrivent quand il ouvre l'appli avec
+   Internet. Tout ce qui concerne les photos est dans **Images** ; **Partage** ne sert qu'au
+   compte, aux contacts et à choisir qui voit quoi.
 
 Ça marche entre la version web (iPhone) et l'appli Android : le compte est le même partout.
 
@@ -140,10 +141,10 @@ celles des proches.
 - **Commentaires** : sur une photo partagée, tous ceux qui la voient peuvent commenter (bouton
   « 💬 Commenter » sous la photo). **Répondre** prépare « @Prénom ». Chacun supprime ses propres
   commentaires ; le propriétaire des photos peut supprimer n'importe lequel des leurs.
-- **Nouveautés** : point rouge sur ☰ et pastille « 💬 » dans le menu (Images pour mes photos,
-  Partage pour celles des proches), pastille sur la couverture de l'album et sur la photo, liste
-  **Nouveaux commentaires** dans Partage, et un message quand l'appli en reçoit. (Pas de
-  notification quand l'appli est fermée.)
+- **Nouveautés** : point rouge sur ☰ et pastille « 💬 » sur Images dans le menu (mes photos et
+  celles des proches), liste **Nouveaux commentaires** tout en haut de la rubrique Images (quand
+  il y en a), pastille sur le proche dans le bandeau, sur la couverture de l'album et sur la
+  photo, et un message quand l'appli en reçoit. (Pas de notification quand l'appli est fermée.)
 - **Plusieurs appareils** : les commentaires de mes photos se lisent et s'écrivent sur chacun de mes
   appareils.
 - **Hors connexion** : un commentaire écrit sans réseau part tout seul au retour d'Internet

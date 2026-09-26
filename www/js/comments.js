@@ -12,7 +12,7 @@ var commentInput = byId('commentInput');
 
 defineView('photo', {
   el: 'view-photo',
-  section: function (params) { return params.local !== undefined ? 'albums' : 'sharing'; },
+  section: function (params) { return params.local !== undefined ? 'albums' : params.from || 'sharing'; },
   title: 'Photo',
   enter: renderPhotoDetail,
   exit: function () {
@@ -377,7 +377,8 @@ function unreadCounts() {
   });
 }
 
-/* Pastilles du menu (Images, Partage) et point sur ☰ : visibles de partout. */
+/* Pastilles du menu et point sur ☰ : visibles de partout. Images compte tout (mes photos, et celles
+   des proches, accessibles par son bandeau) ; Partage, les photos des proches. */
 var drawerBadges = {};
 ['albums', 'sharing'].forEach(function (section) {
   var item = document.querySelector('.drawer-item[data-section="' + section + '"]');
@@ -386,7 +387,7 @@ var drawerBadges = {};
 
 function updateUnreadIndicators() {
   return unreadCounts().then(function (counts) {
-    [['albums', counts.mine], ['sharing', counts.others]].forEach(function (pair) {
+    [['albums', counts.mine + counts.others], ['sharing', counts.others]].forEach(function (pair) {
       drawerBadges[pair[0]].textContent = pair[1] ? '💬 ' + pair[1] : '';
       drawerBadges[pair[0]].hidden = !pair[1];
     });

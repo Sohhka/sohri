@@ -24,7 +24,7 @@ contacte aucun serveur : l'accès à Internet ne sert qu'au partage entre proche
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-1.7.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+1. Copier `dist/Sohri-1.8.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
    télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
@@ -112,9 +112,12 @@ Sans compte, rien ne change : l'appli reste entièrement hors connexion. Avec un
 3. **Ce que je partage → Images** : cocher les proches qui peuvent voir les albums. Les photos
    partent réduites (1600 pixels) vers le serveur, dans l'ordre, dès qu'il y a Internet ; les
    ajouts, suppressions et changements de nom suivent tout seuls.
-4. Chez le proche, **Partagés avec moi** : les albums (en lecture seule) sont copiés sur son
-   téléphone et restent consultables **hors connexion**. Les nouveautés arrivent quand il ouvre
-   l'appli avec Internet.
+4. Chez le proche, en haut de la rubrique **Images**, un bandeau **Mes proches** (façon
+   « stories ») montre ceux qui lui partagent leurs photos : leur photo la plus récente en rond,
+   avec un anneau de couleur et « 3 nouvelles » s'il y en a depuis sa dernière visite, et 💬 pour
+   les nouveaux commentaires. Un appui ouvre leurs albums (aussi accessibles par Partage →
+   **Partagés avec moi**). Ils sont copiés sur son téléphone et restent consultables **hors
+   connexion** ; les nouveautés arrivent quand il ouvre l'appli avec Internet.
 
 Ça marche entre la version web (iPhone) et l'appli Android : le compte est le même partout.
 

@@ -370,13 +370,30 @@ function ownerName(owner) {
   return grant ? grant.name : 'Un proche';
 }
 
+/* params.from : 'albums' quand on vient du bandeau de la rubrique Images (elle reste en évidence
+   dans le menu), sinon on vient de l'écran Partage. */
+function sharedSection(params) {
+  return params.from || 'sharing';
+}
+
 defineView('shared-albums', {
   el: 'view-shared-albums',
-  section: 'sharing',
+  section: sharedSection,
   title: function (params) { return 'Images de ' + ownerName(params.owner); },
-  enter: renderSharedAlbums,
-  exit: function () { releaseBlobUrls('sharedAlbums'); }
+  enter: function (params) {
+    markSharedSeen(params.owner);
+    return renderSharedAlbums(params);
+  },
+  exit: function (params) {
+    markSharedSeen(params.owner);
+    releaseBlobUrls('sharedAlbums');
+  }
 });
+
+/* Les photos de ce proche arrivées jusqu'ici ne sont plus « nouvelles » (bandeau des Images). */
+function markSharedSeen(owner) {
+  if (isSignedIn()) cloudPut('seen:' + owner, Date.now())['catch'](function (err) { console.error(err); });
+}
 
 function renderSharedAlbums(params) {
   return Promise.all([dbGetAllByIndex('sharedAlbums', 'owner', params.owner), dbGetAllByIndex('sharedPhotos', 'owner', params.owner), commentStats()]).then(function (r) {
@@ -389,7 +406,7 @@ function renderSharedAlbums(params) {
     r[0].sort(byName).forEach(function (album) {
       var photos = (byAlbum[album.key] || []).sort(function (a, b) { return (a.takenAt || 0) - (b.takenAt || 0); });
       var unread = photos.reduce(function (sum, p) { return sum + (r[2][p.key] ? r[2][p.key].unread : 0); }, 0);
-      grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('shared-album', { owner: params.owner, album: album.key }); } }, [
+      grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('shared-album', { owner: params.owner, album: album.key, from: params.from }); } }, [
         h('span', { className: 'album-cover' }, [
           photos[0]
             ? sharedThumbImage(photos[0], 'sharedAlbums')
@@ -417,6 +434,52 @@ function sharedThumbImage(photo, group, lazy) {
   });
 }
 
+/* ---------- Bandeau de la rubrique Images : les proches qui me partagent les leurs ----------
+   Comme les « stories » : leur photo la plus récente en rond (anneau de couleur s'il y en a de
+   nouvelles depuis ma dernière visite), leur prénom, et un appui ouvre leurs albums. */
+function sharedPeople() {
+  var grants = isSignedIn() ? cloudState.grantsToMe.filter(function (g) { return g.categories.indexOf('albums') >= 0; }) : [];
+  if (!grants.length) return Promise.resolve([]);
+  return Promise.all([dbGetAll('sharedPhotos'), loadSyncRecords('seen:')]).then(function (r) {
+    return grants.map(function (grant) {
+      var photos = r[0].filter(function (p) { return p.owner === grant.owner; });
+      var seen = r[1][grant.owner] || 0;
+      var latest = null;
+      photos.forEach(function (p) {
+        if (!latest || (p.receivedAt || 0) > (latest.receivedAt || 0) ||
+          ((p.receivedAt || 0) === (latest.receivedAt || 0) && (p.takenAt || 0) > (latest.takenAt || 0))) latest = p;
+      });
+      return {
+        owner: grant.owner, name: grant.name || 'Un proche', cover: latest, count: photos.length,
+        fresh: photos.filter(function (p) { return (p.receivedAt || 0) > seen; }).length
+      };
+    });
+  });
+}
+
+function renderSharedStrip(people, group) {
+  var strip = byId('sharedStrip');
+  strip.innerHTML = '';
+  strip.hidden = !people.length;
+  if (!people.length) return;
+  strip.appendChild(h('h2', { className: 'section-title', text: 'Mes proches' }));
+  strip.appendChild(h('div', { className: 'shared-strip-row' }, people.map(function (person) {
+    var sub = person.fresh ? plural(person.fresh, 'nouvelle', 'nouvelles') : person.count ? plural(person.count, 'photo', 'photos') : 'Rien encore';
+    return h('button', {
+      type: 'button', className: 'person-tile', 'aria-label': 'Images de ' + person.name + ' (' + sub + ')',
+      onclick: function () { openView('shared-albums', { owner: person.owner, from: 'albums' }); }
+    }, [
+      h('span', { className: 'person-avatar' + (person.fresh ? ' has-new' : '') }, [
+        person.cover ? sharedThumbImage(person.cover, group) : h('span', { className: 'person-emoji', text: '👤' }),
+        h('span', { className: 'unread-count person-unread', hidden: true, dataset: { ownerUnread: person.owner } }) // nouveaux commentaires
+      ]),
+      h('span', { className: 'person-name', text: person.name }),
+      h('span', { className: 'person-sub' + (person.fresh ? ' is-new' : ''), text: sub })
+    ]);
+  })));
+  updateUnreadIndicators();
+}
+
 /* « 12 photos, dont 3 encore à recevoir » : ce qui est déjà consultable hors connexion. */
 function sharedInfoText(photos) {
   var missing = photos.filter(function (p) { return !p.blob; }).length;
@@ -426,7 +489,7 @@ function sharedInfoText(photos) {
 
 defineView('shared-album', {
   el: 'view-shared-album',
-  section: 'sharing',
+  section: sharedSection,
   title: 'Album',
   enter: renderSharedAlbum,
   exit: function () { releaseBlobUrls('sharedAlbum'); }
@@ -471,6 +534,7 @@ byId('sharedPhotoGrid').addEventListener('click', function (e) {
   if (!cell) return;
   var photos = sharedAlbumPhotos.slice();
   var index = parseInt(cell.dataset.index, 10);
+  var from = currentEntry().params.from;
   openViewer(photos.map(function (p) { return p.blob || p.thumb; }), index, [
     { icon: '↗', label: 'Partager', onClick: function (i) {
       if (photos[i].blob) shareFile(photos[i].blob, photoFileName(photos[i]));
@@ -481,7 +545,7 @@ byId('sharedPhotoGrid').addEventListener('click', function (e) {
       var stats = sharedAlbumStats[photos[i].key];
       return { caption: photos[i].caption || '', location: photos[i].location || '', label: commentLabel(stats, true, false), unread: stats && stats.unread > 0 };
     },
-    open: function (i) { openView('photo', { owner: photos[i].owner, rid: photos[i].rid }); },
+    open: function (i) { openView('photo', { owner: photos[i].owner, rid: photos[i].rid, from: from }); },
     // Photo qui ne s'affiche pas : relue dans la base, puis (celle enregistrée étant sans doute
     // abîmée) téléchargée de nouveau.
     reload: function (i, attempt) {

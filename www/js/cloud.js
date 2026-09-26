@@ -1260,7 +1260,9 @@ function receiveAlbums(owner) {
       return cloudPut(key, state);
     }).then(function () {
       return fsChangesSince(parent, 'photos', state.photos, function (docs) {
+        var existing = [];
         return Promise.all(docs.map(function (doc) { return dbGet('sharedPhotos', owner + '/' + doc._id); })).then(function (rows) {
+          existing = rows;
           // Photo en grand déjà reçue et inchangée (seule la description, le lieu ou l'album ont
           // changé) : gardée, recopiée en mémoire (voir detachBlobs, db.js) ; illisible, elle sera
           // simplement téléchargée de nouveau.
@@ -1282,7 +1284,9 @@ function receiveAlbums(owner) {
                 takenAt: doc.takenAt, width: doc.width, height: doc.height, parts: doc.parts, size: doc.size,
                 caption: doc.caption || '', location: doc.location || '',
                 thumb: new Blob([doc.thumb], { type: 'image/jpeg' }),
-                blob: kept[i]
+                blob: kept[i],
+                // Arrivée sur ce téléphone : « nouvelle » jusqu'à la prochaine visite (bandeau des Images).
+                receivedAt: existing[i] ? existing[i].receivedAt || 0 : Date.now()
               });
             });
           });

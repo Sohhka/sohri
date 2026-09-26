@@ -44,9 +44,12 @@ defineView('albums', {
 
 function renderAlbums() {
   var renderId = ++albumsRenderId;
-  return Promise.all([dbGetAll('folders'), dbGetAll('photos'), commentStats()]).then(function (results) {
+  return Promise.all([dbGetAll('folders'), dbGetAll('photos'), commentStats(), sharedPeople()]).then(function (results) {
     if (renderId !== albumsRenderId) return;
     releaseBlobUrls('albums');
+    // En haut, les proches qui me partagent leurs Images (accès direct), puis mes albums.
+    renderSharedStrip(results[3], 'albums');
+    byId('myAlbumsTitle').hidden = !results[3].length;
     var albums = results[0].filter(isAlbum).sort(byName);
     var stats = results[2];
     var photosByAlbum = {};

@@ -381,6 +381,35 @@ main {
 .md-toolbar button:active { background: var(--accent-soft); color: var(--accent); }
 
 /* ---------- Images : albums et photos ---------- */
+/* Bandeau des Images : les proches qui me partagent les leurs (façon « stories »). S'il y a
+   beaucoup de monde, il défile de côté jusqu'aux bords de l'écran (le suivant dépasse : on voit
+   qu'il y en a d'autres), sans faire défiler la page. */
+.shared-strip { margin-bottom: 6px; }
+.shared-strip-row {
+  display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain;
+  padding: 6px 20px 8px; margin: 0 -20px; scrollbar-width: none;
+}
+.shared-strip-row::-webkit-scrollbar { display: none; }
+.person-tile {
+  flex: 0 0 auto; width: 72px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 0; border: none; background: none; color: var(--text); font: inherit;
+}
+.person-avatar {
+  position: relative; width: 68px; height: 68px; padding: 3px; border-radius: 50%; background: var(--divider);
+}
+.person-avatar.has-new { background: linear-gradient(135deg, var(--accent), #E8A33D); }
+.person-avatar img, .person-emoji {
+  display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
+  border-radius: 50%; border: 3px solid var(--bg); object-fit: cover; background: var(--surface); font-size: 1.9rem;
+}
+.person-unread { position: absolute; top: -4px; right: -8px; min-width: 0; padding: 1px 6px; font-size: 0.72rem; }
+.person-name {
+  max-width: 100%; margin-top: 3px; font-size: 0.82rem; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.person-sub { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
+.person-sub.is-new { color: var(--accent); font-weight: 700; }
+
 .album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px 14px; }
 .album-card { display: flex; flex-direction: column; gap: 2px; padding: 0; border: none; background: none; color: var(--text); text-align: left; }
 .album-cover {

@@ -669,18 +669,27 @@ function syncNow() {
     return cloudSyncRunning;
   }
   setCloudStatus('syncing');
+  var publishError = null;
   cloudSyncRunning = loadMyProfile()
     .then(syncContacts)
     .then(loadGrants)
     .then(function () { notifyCloud('data'); })
-    .then(publishAlbums)
+    .then(function () {
+      // Une de mes photos qui ne part pas n'empêche pas de recevoir celles des proches.
+      return publishAlbums().then(null, function (err) {
+        if (err.cloud === 'offline' || err.cloud === 'signed-out') throw err;
+        publishError = err;
+      });
+    })
     .then(sendPendingComments)
     .then(receiveShares)
     .then(syncComments)
     .then(downloadSharedPhotos)
     .then(function () {
+      if (publishError) throw publishError;
       setCloudStatus('done');
-    }, function (err) {
+    })
+    .then(null, function (err) {
       if (err.cloud !== 'offline') console.warn('Synchronisation interrompue', err);
       setCloudStatus(err.cloud === 'offline' ? 'offline' : err.cloud === 'signed-out' ? 'signed-out' : 'error', { error: err });
     })
@@ -827,11 +836,19 @@ function publishChanges(albums, photos, published) {
       });
     }
   });
+  // Une photo qui ne part pas (illisible...) n'empêche pas les autres : l'erreur est signalée à la
+  // fin, et la photo réessayée à la prochaine synchronisation.
+  var uploadError = null;
   uploads.sort(function (a, b) { return (a.photo.takenAt || 0) - (b.photo.takenAt || 0); });
   uploads.forEach(function (item, i) {
     tasks.push(function () {
       setCloudStatus('syncing', { progress: { label: 'Envoi des photos partagées', done: i, total: uploads.length } });
-      return uploadPhoto(item.photo, item.rid, item.album);
+      return uploadPhoto(item.photo, item.rid, item.album).then(null, function (err) {
+        if (err.cloud === 'offline' || err.cloud === 'signed-out') throw err;
+        console.warn('Photo pas encore envoyée', item.rid, err);
+        if (!err.cloud) err.userMessage = "Une photo n'a pas pu être envoyée : nouvel essai à la prochaine synchronisation.";
+        uploadError = uploadError || err;
+      });
     });
   });
   // Photos, puis albums supprimés : une trace datée prévient les proches ; les commentaires de la
@@ -860,7 +877,9 @@ function publishChanges(albums, photos, published) {
       });
     }
   });
-  return tasks.reduce(function (chain, task) { return chain.then(task); }, Promise.resolve());
+  return tasks.reduce(function (chain, task) { return chain.then(task); }, Promise.resolve()).then(function () {
+    if (uploadError) throw uploadError;
+  });
 }
 
 /* Une photo : réduite (1600 px), en morceaux de moins de 1 Mo, avec sa miniature. */
@@ -992,7 +1011,15 @@ function receiveAlbums(owner) {
       return cloudPut(key, state);
     }).then(function () {
       return fsChangesSince(parent, 'photos', state.photos, function (docs) {
-        return Promise.all(docs.map(function (doc) { return dbGet('sharedPhotos', owner + '/' + doc._id); })).then(function (existing) {
+        return Promise.all(docs.map(function (doc) { return dbGet('sharedPhotos', owner + '/' + doc._id); })).then(function (rows) {
+          // Photo en grand déjà reçue et inchangée (seule la description, le lieu ou l'album ont
+          // changé) : gardée, recopiée en mémoire (voir detachBlobs, db.js) ; illisible, elle sera
+          // simplement téléchargée de nouveau.
+          return Promise.all(rows.map(function (old, i) {
+            if (!old || !old.blob || docs[i].deleted || old.size !== docs[i].size) return null;
+            return copyBlob(old.blob).then(null, function () { return null; });
+          }));
+        }).then(function (kept) {
           return dbWrite(['sharedPhotos', 'sharedComments'], function (tx) {
             docs.forEach(function (doc, i) {
               var id = owner + '/' + doc._id;
@@ -1001,13 +1028,12 @@ function receiveAlbums(owner) {
                 deleteCommentsOfPhoto(tx, id);
                 return;
               }
-              var old = existing[i];
               tx.objectStore('sharedPhotos').put({
                 key: id, owner: owner, rid: doc._id, albumKey: owner + '/' + doc.album,
                 takenAt: doc.takenAt, width: doc.width, height: doc.height, parts: doc.parts, size: doc.size,
                 caption: doc.caption || '', location: doc.location || '',
                 thumb: new Blob([doc.thumb], { type: 'image/jpeg' }),
-                blob: old && old.size === doc.size ? old.blob : null
+                blob: kept[i]
               });
             });
           });
@@ -1020,21 +1046,79 @@ function receiveAlbums(owner) {
   });
 }
 
-/* Photos en taille réelle, téléchargées en arrière-plan (hors connexion ensuite). */
+/* Photos en taille réelle, téléchargées en arrière-plan (hors connexion ensuite). Une photo qui ne
+   vient pas n'empêche pas les suivantes : elle est redemandée un peu plus tard (1 min, 2 min, 4 min...). */
+var sharedDownloads = {};       // clé → téléchargement en cours (la visionneuse et l'arrière-plan le partagent)
+var sharedDownloadFailures = {}; // clé → { tries, retryAt }
+var sharedRetryTimer = null;
+
 function downloadSharedPhotos() {
   return dbGetAll('sharedPhotos').then(function (photos) {
-    var missing = photos.filter(function (p) { return !p.blob; }).sort(function (a, b) { return (a.takenAt || 0) - (b.takenAt || 0); });
+    var now = Date.now();
+    var waiting = {};
+    photos.forEach(function (p) { if (!p.blob) waiting[p.key] = true; });
+    Object.keys(sharedDownloadFailures).forEach(function (key) {
+      if (!waiting[key]) delete sharedDownloadFailures[key]; // reçue entre-temps, ou retirée
+    });
+    var missing = photos.filter(function (p) {
+      var failure = sharedDownloadFailures[p.key];
+      return !p.blob && !(failure && failure.retryAt > now);
+    }).sort(function (a, b) { return (a.takenAt || 0) - (b.takenAt || 0); });
     return missing.reduce(function (chain, photo, i) {
       return chain.then(function () {
         setCloudStatus('syncing', { progress: { label: 'Réception des photos', done: i, total: missing.length } });
-        return downloadSharedPhoto(photo);
+        return downloadSharedPhoto(photo).then(null, function (err) {
+          // Plus de connexion (ou de session) : inutile d'essayer les suivantes.
+          if (err.cloud === 'offline' || err.cloud === 'signed-out') throw err;
+          console.warn('Photo pas encore reçue', photo.key, err);
+        });
       });
     }, Promise.resolve());
-  });
+  }).then(scheduleDownloadRetry);
 }
 
-/* Contenu d'une photo reçue (téléchargé si besoin) : promesse du Blob. */
-function downloadSharedPhoto(photo) {
+function scheduleDownloadRetry() {
+  var keys = Object.keys(sharedDownloadFailures);
+  clearTimeout(sharedRetryTimer);
+  if (!keys.length) return;
+  var next = Math.min.apply(null, keys.map(function (key) { return sharedDownloadFailures[key].retryAt; }));
+  sharedRetryTimer = setTimeout(function () {
+    if (cloudSession && document.visibilityState === 'visible') syncNow();
+  }, Math.max(15000, next - Date.now()));
+}
+
+/* Contenu d'une photo reçue : celui déjà enregistré, sinon téléchargé (force : téléchargé de
+   nouveau, l'enregistré étant illisible). Promesse du Blob. */
+function downloadSharedPhoto(photo, force) {
+  var key = photo.key;
+  if (sharedDownloads[key]) return sharedDownloads[key];
+  var download = dbGet('sharedPhotos', key).then(function (current) {
+    if (!current) throw cloudError('not-found', 'Photo retirée');
+    if (current.blob && !force) return current.blob;
+    return fetchSharedPhoto(current).then(function (blob) {
+      return dbGet('sharedPhotos', key).then(function (latest) {
+        if (!latest || latest.size !== current.size) return blob; // retirée ou remplacée entre-temps
+        latest.blob = blob;
+        return dbPut('sharedPhotos', latest).then(function () {
+          delete sharedDownloadFailures[key];
+          notifyCloud('photo:' + key);
+          return blob;
+        });
+      });
+    });
+  });
+  sharedDownloads[key] = download;
+  download.then(function () { delete sharedDownloads[key]; }, function (err) {
+    delete sharedDownloads[key];
+    if (err.cloud === 'offline' || err.cloud === 'signed-out') return;
+    var tries = ((sharedDownloadFailures[key] || {}).tries || 0) + 1;
+    sharedDownloadFailures[key] = { tries: tries, retryAt: Date.now() + Math.min(30, Math.pow(2, tries - 1)) * 60000 };
+  });
+  return download;
+}
+
+/* Morceaux d'une photo, réassemblés et vérifiés (tous là, taille exacte, bien un JPEG). */
+function fetchSharedPhoto(photo) {
   var names = [];
   for (var i = 0; i < photo.parts; i++) names.push(cloudUrls().root + '/users/' + photo.owner + '/photoParts/' + photo.rid + '-' + i);
   return fsRequest('POST', ':batchGet', { documents: names }).then(function (rows) {
@@ -1045,16 +1129,13 @@ function downloadSharedPhoto(photo) {
         parts[part.index] = part.data;
       }
     });
-    if (parts.length !== photo.parts || parts.some(function (p) { return !p; })) throw cloudError('not-found', 'Photo incomplète');
-    var blob = new Blob(parts, { type: 'image/jpeg' });
-    return dbGet('sharedPhotos', photo.key).then(function (current) {
-      if (!current) return blob; // retirée entre-temps
-      current.blob = blob;
-      return dbPut('sharedPhotos', current).then(function () {
-        notifyCloud('photo:' + photo.key);
-        return blob;
-      });
-    });
+    for (var n = 0; n < photo.parts; n++) {
+      if (!parts[n]) throw cloudError('not-found', 'Photo incomplète');
+    }
+    var blob = new Blob(parts.slice(0, photo.parts), { type: 'image/jpeg' });
+    var head = parts[0];
+    if ((photo.size && blob.size !== photo.size) || head[0] !== 0xFF || head[1] !== 0xD8) throw cloudError('not-found', 'Photo illisible');
+    return blob;
   });
 }
 

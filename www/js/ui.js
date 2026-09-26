@@ -85,6 +85,27 @@ function releaseBlobUrls(group) {
   blobUrlGroups[group] = [];
 }
 
+/* Image lue dans la base qui ne s'affiche pas (voir detachBlobs, db.js) : pas d'icône d'image
+   cassée mais un fond neutre, et nouvel essai après 1 s, 3 s puis 8 s avec reload(essai), qui
+   donne l'image relue dans la base (ou téléchargée de nouveau). */
+var IMAGE_RETRY_DELAYS = [1000, 3000, 8000];
+function healingImage(img, group, reload) {
+  var tries = 0;
+  img.addEventListener('load', function () { img.classList.remove('is-missing'); });
+  img.addEventListener('error', function () {
+    img.classList.add('is-missing');
+    if (!reload || tries >= IMAGE_RETRY_DELAYS.length) return;
+    var attempt = tries++;
+    setTimeout(function () {
+      if (!img.isConnected) return;
+      Promise.resolve(reload(attempt)).then(function (blob) {
+        if (blob && img.isConnected) img.src = blobUrl(group, blob);
+      }, function () { /* toujours rien : le fond neutre reste */ });
+    }, IMAGE_RETRY_DELAYS[attempt]);
+  });
+  return img;
+}
+
 /* Ouvre un lien (itinéraire Google Maps, site web, téléphone...) dans l'appli adaptée du téléphone. */
 function openExternal(url) {
   if (window.AndroidBridge) window.AndroidBridge.openExternal(url);
@@ -352,10 +373,12 @@ var viewerItems = [];
 var viewerIndex = 0;
 var viewerSwipe = null;
 var viewerDetails = null;
+var viewerRetry = { index: -1, tries: 0, timer: null };
 
 /* items : liste de Blob (ou d'URL) ; actions : boutons { icon, label, onClick(index) } en haut à droite ;
-   details (albums) : { info(index) → { caption, label, unread }, open(index) } : description en bas
-   de la photo et bouton (commentaires...) qui ouvre la fiche de la photo. */
+   details (albums) : { info(index) → { caption, label, unread }, open(index), reload(index, essai) }
+   : description en bas de la photo, bouton (commentaires...) qui ouvre la fiche de la photo, et
+   image de remplacement si celle affichée ne se charge pas (promesse d'un Blob). */
 function openViewer(items, index, actions, details) {
   viewerItems = items.slice();
   viewerDetails = details || null;
@@ -374,6 +397,12 @@ function openViewer(items, index, actions, details) {
 function viewerShow(index, direction) {
   releaseBlobUrls('viewer');
   viewerIndex = Math.max(0, Math.min(index, viewerItems.length - 1));
+  if (viewerRetry.index !== viewerIndex) {
+    clearTimeout(viewerRetry.timer);
+    viewerRetry = { index: viewerIndex, tries: 0, timer: null };
+  }
+  byId('viewerStatus').hidden = true;
+  viewerImg.classList.remove('is-missing');
   viewerEl.classList.remove('zoomed');
   viewerImg.style.width = '';
   viewerImg.src = blobUrl('viewer', viewerItems[viewerIndex]);
@@ -427,8 +456,38 @@ function closeViewer() {
   viewerImg.removeAttribute('src');
   viewerItems = [];
   viewerDetails = null;
+  clearTimeout(viewerRetry.timer);
+  viewerRetry = { index: -1, tries: 0, timer: null };
   releaseBlobUrls('viewer');
 }
+
+/* Photo qui ne s'affiche pas : message à la place d'un écran noir, et nouvel essai (relue dans la
+   base, ou téléchargée de nouveau) après 1 s, 3 s puis 8 s. */
+viewerImg.addEventListener('error', function () {
+  if (viewerEl.hidden || !viewerImg.getAttribute('src')) return;
+  var index = viewerIndex;
+  var status = byId('viewerStatus');
+  var canRetry = viewerDetails && viewerDetails.reload && viewerRetry.tries < IMAGE_RETRY_DELAYS.length;
+  viewerImg.classList.add('is-missing');
+  status.textContent = canRetry ? 'Chargement de la photo…' : 'Photo indisponible pour le moment.';
+  status.hidden = false;
+  if (!canRetry) return;
+  var attempt = viewerRetry.tries++;
+  var details = viewerDetails;
+  clearTimeout(viewerRetry.timer);
+  viewerRetry.timer = setTimeout(function () {
+    if (viewerEl.hidden || viewerDetails !== details || viewerIndex !== index) return;
+    Promise.resolve(details.reload(index, attempt)).then(function (blob) {
+      if (blob && viewerDetails === details) viewerReplace(index, blob);
+    }, function () {
+      if (viewerDetails === details && viewerIndex === index) status.textContent = 'Photo indisponible pour le moment.';
+    });
+  }, IMAGE_RETRY_DELAYS[attempt]);
+});
+viewerImg.addEventListener('load', function () {
+  byId('viewerStatus').hidden = true;
+  viewerImg.classList.remove('is-missing');
+});
 
 byId('viewerInfoBtn').addEventListener('click', function (e) {
   e.stopPropagation();

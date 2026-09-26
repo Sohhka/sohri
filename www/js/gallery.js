@@ -60,7 +60,7 @@ function renderAlbums() {
       grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('album', { id: album.id }); } }, [
         h('span', { className: 'album-cover' }, [
           cover
-            ? h('img', { src: blobUrl('albums', cover.thumb || cover.blob), alt: '' })
+            ? photoThumbImage(cover, 'albums')
             : h('span', { className: 'album-cover-icon', text: folderIcon(album) }),
           albumBadge(unread)
         ]),
@@ -110,6 +110,17 @@ function renderAlbum(params) {
   });
 }
 
+/* Miniature d'une de mes photos ; illisible, elle est relue dans la base (voir healingImage). */
+function photoThumbImage(photo, group, lazy) {
+  var img = h('img', { src: blobUrl(group, photo.thumb || photo.blob), alt: '', loading: lazy ? 'lazy' : undefined });
+  return healingImage(img, group, function (attempt) {
+    return dbGet('photos', photo.id).then(function (current) {
+      if (!current) return null;
+      return attempt >= IMAGE_RETRY_DELAYS.length - 1 ? current.blob : current.thumb || current.blob;
+    });
+  });
+}
+
 /* Grille de miniatures, regroupées par jour de prise de vue. */
 function renderPhotoGrid() {
   releaseBlobUrls('album');
@@ -128,7 +139,7 @@ function renderPhotoGrid() {
       type: 'button', className: 'photo-cell' + (selectedPhotoIds[photo.id] ? ' is-selected' : ''),
       'aria-label': 'Photo ' + (index + 1), dataset: { index: index }
     }, [
-      h('img', { src: blobUrl('album', photo.thumb || photo.blob), alt: '', loading: 'lazy' }),
+      photoThumbImage(photo, 'album', true),
       selectingPhotos ? null : commentBadge(albumCommentStats[ownPhotoKey(photo)])
     ]));
   });
@@ -163,7 +174,15 @@ function openAlbumViewer(index) {
         label: commentLabel(stats, shared, !!(p.caption || p.location)), unread: stats && stats.unread > 0
       };
     },
-    open: function (i) { openView('photo', { local: photos[i].id }); }
+    open: function (i) { openView('photo', { local: photos[i].id }); },
+    // Photo qui ne s'affiche pas : relue dans la base (voir detachBlobs, db.js).
+    reload: function (i) {
+      return dbGet('photos', photos[i].id).then(function (current) {
+        if (!current) return null;
+        photos[i].blob = current.blob;
+        return current.blob;
+      });
+    }
   };
   openViewer(photos.map(function (p) { return p.blob; }), index, [
     { icon: '↗', label: 'Partager', onClick: function (i) { shareFile(photos[i].blob, photoFileName(photos[i])); } },
@@ -319,10 +338,13 @@ byId('selectionMoveBtn').addEventListener('click', function () {
     return albumId === undefined ? null : dbGet('folders', albumId);
   }).then(function (target) {
     if (!target) return;
-    return dbWrite(['photos'], function (tx) {
-      photos.forEach(function (photo) {
-        photo.albumId = target.id;
-        tx.objectStore('photos').put(photo);
+    // Images recopiées avant d'être réenregistrées (voir detachBlobs, db.js).
+    return Promise.all(photos.map(function (photo) { return detachBlobs(photo); })).then(function () {
+      return dbWrite(['photos'], function (tx) {
+        photos.forEach(function (photo) {
+          photo.albumId = target.id;
+          tx.objectStore('photos').put(photo);
+        });
       });
     }).then(function () {
       exitPhotoSelection();

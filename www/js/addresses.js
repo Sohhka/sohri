@@ -244,12 +244,14 @@ function showAddressMenu() {
 function deleteAddress(address) {
   uiConfirm('Supprimer « ' + address.title + ' » du carnet ?', 'Supprimer', true).then(function (ok) {
     if (!ok) return;
-    return dbWrite(['addresses', 'notes'], function (tx) {
-      tx.objectStore('addresses')['delete'](address.id);
-      dbUpdateEach(tx, 'notes', function (note) {
-        if (String(note.addressId) !== String(address.id)) return false;
-        note.addressId = null;
-        return true;
+    return dbChangedRecords('notes', function (note) {
+      if (String(note.addressId) !== String(address.id)) return false;
+      note.addressId = null;
+      return true;
+    }).then(function (notes) {
+      return dbWrite(['addresses', 'notes'], function (tx) {
+        tx.objectStore('addresses')['delete'](address.id);
+        notes.forEach(function (note) { tx.objectStore('notes').put(note); });
       });
     }).then(function () {
       leaveAfterDelete('addresses');

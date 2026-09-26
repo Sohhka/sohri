@@ -93,12 +93,14 @@ function deleteFolderKeepingItems(folder, storeName, explanation, section) {
   uiConfirm('Supprimer le dossier « ' + folder.name + ' » ? ' + explanation, 'Supprimer', true)
     .then(function (ok) {
       if (!ok) return;
-      return dbWrite(['folders', storeName], function (tx) {
-        tx.objectStore('folders')['delete'](folder.id);
-        dbUpdateEach(tx, storeName, function (item) {
-          if (item.folderId !== folder.id) return false;
-          item.folderId = null;
-          return true;
+      return dbChangedRecords(storeName, function (item) {
+        if (item.folderId !== folder.id) return false;
+        item.folderId = null;
+        return true;
+      }).then(function (items) {
+        return dbWrite(['folders', storeName], function (tx) {
+          tx.objectStore('folders')['delete'](folder.id);
+          items.forEach(function (item) { tx.objectStore(storeName).put(item); });
         });
       }).then(function () {
         leaveAfterDelete(section);

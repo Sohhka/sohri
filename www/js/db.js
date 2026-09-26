@@ -113,8 +113,39 @@ function dbGet(storeName, key) {
     });
   });
 }
+/* Safari (iPhone) : une image lue dans la base puis réenregistrée telle quelle (photo dont on change
+   la description, photo reçue en grand ajoutée à sa fiche...) peut devenir illisible à la lecture
+   suivante (carré bleu « ? » à la place de la vignette), jusqu'à une nouvelle lecture plusieurs
+   secondes plus tard. On enregistre donc toujours des copies en mémoire des images (Blob) d'un
+   enregistrement : detachBlobs les remplace sur place, à toute profondeur (pièces jointes...). */
+function copyBlob(blob) {
+  return blob.arrayBuffer().then(function (data) { return new Blob([data], { type: blob.type }); });
+}
+function detachBlobs(value, depth) {
+  depth = depth || 0;
+  if (!value || typeof value !== 'object' || depth > 4) return Promise.resolve(value);
+  var keys = Array.isArray(value) ? value.map(function (item, i) { return i; }) : Object.keys(value);
+  return Promise.all(keys.map(function (key) {
+    var item = value[key];
+    if (item instanceof Blob) return copyBlob(item).then(function (copy) { value[key] = copy; });
+    if (item && typeof item === 'object' && !ArrayBuffer.isView(item) && !(item instanceof ArrayBuffer)) return detachBlobs(item, depth + 1);
+    return null;
+  })).then(function () { return value; });
+}
+
+/* Enregistrements d'un magasin que change(record) modifie (en renvoyant true), prêts à être
+   réenregistrés (images recopiées) : dbWrite(..., function (tx) { records.forEach(put) }). */
+function dbChangedRecords(storeName, change) {
+  return dbGetAll(storeName).then(function (all) {
+    var changed = all.filter(function (record) { return change(record); });
+    return Promise.all(changed.map(function (record) { return detachBlobs(record); }));
+  });
+}
+
 function dbPut(storeName, value) {
-  return dbPromise.then(function (db) {
+  return detachBlobs(value).then(function () {
+    return dbPromise;
+  }).then(function (db) {
     return new Promise(function (resolve, reject) {
       if (!db) return reject(new Error('Base de données indisponible'));
       var tx = db.transaction(storeName, 'readwrite');
@@ -160,17 +191,6 @@ function dbWrite(storeNames, work) {
       work(tx);
     });
   });
-}
-
-/* Parcourt un magasin et modifie chaque enregistrement pour lequel change(record) renvoie true. */
-function dbUpdateEach(tx, storeName, change) {
-  tx.objectStore(storeName).openCursor().onsuccess = function (e) {
-    var cursor = e.target.result;
-    if (!cursor) return;
-    var record = cursor.value;
-    if (change(record)) cursor.update(record);
-    cursor['continue']();
-  };
 }
 
 /* Remplace tout le contenu de la base (restauration d'une sauvegarde), en une seule transaction. */

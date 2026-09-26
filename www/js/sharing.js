@@ -4,6 +4,7 @@ var PUBLIC_SITE = 'https://sohhka.github.io/sohri/';
 var PUBLIC_APK = 'https://github.com/Sohhka/sohri/releases/latest';
 var shareToggleBusy = false;
 var sharedRenderTimer = null;
+var sharedInfoTimer = null;
 
 byId('drawerSharing').hidden = !cloudEnabled();
 
@@ -114,6 +115,8 @@ function renderSharing() {
     ]));
   });
   box.appendChild(h('button', { type: 'button', className: 'add-row', text: '＋ Ajouter un contact', onclick: addContact }));
+  // Déconnexion, bien visible (aussi dans le menu ⋮ « Mon compte »).
+  box.appendChild(h('button', { type: 'button', className: 'secondary-btn sign-out-btn', text: '🚪 Se déconnecter', onclick: signOut }));
 }
 
 /* Lignes d'état de la synchronisation (mises à jour sans redessiner l'écran). */
@@ -398,7 +401,7 @@ function renderSharedAlbums(params) {
       grid.appendChild(h('button', { type: 'button', className: 'album-card', onclick: function () { openView('shared-album', { owner: params.owner, album: album.key }); } }, [
         h('span', { className: 'album-cover' }, [
           photos[0]
-            ? h('img', { src: blobUrl('sharedAlbums', photos[0].thumb), alt: '' })
+            ? sharedThumbImage(photos[0], 'sharedAlbums')
             : h('span', { className: 'album-cover-icon', text: album.icon || '🖼️' }),
           albumBadge(unread)
         ]),
@@ -408,6 +411,18 @@ function renderSharedAlbums(params) {
     });
     byId('sharedAlbumsInfo').textContent = sharedInfoText(r[1]);
     showEmpty(byId('sharedAlbumsEmpty'), !r[0].length, cloudStatus.state === 'syncing' ? 'Réception en cours…' : ownerName(params.owner) + " n'a pas encore d'album.");
+  });
+}
+
+/* Vignette d'une photo reçue ; illisible, elle est relue dans la base (voir healingImage), et au
+   dernier essai remplacée par la photo en grand si elle est là. */
+function sharedThumbImage(photo, group, lazy) {
+  var img = h('img', { src: blobUrl(group, photo.thumb), alt: '', loading: lazy ? 'lazy' : undefined });
+  return healingImage(img, group, function (attempt) {
+    return dbGet('sharedPhotos', photo.key).then(function (current) {
+      if (!current) return null;
+      return attempt >= IMAGE_RETRY_DELAYS.length - 1 ? current.blob || current.thumb : current.thumb;
+    });
   });
 }
 
@@ -449,7 +464,7 @@ function renderSharedAlbum(params) {
         grid = container.appendChild(h('div', { className: 'photo-grid' }));
       }
       grid.appendChild(h('button', { type: 'button', className: 'photo-cell', 'aria-label': 'Photo ' + (index + 1), dataset: { index: index } }, [
-        h('img', { src: blobUrl('sharedAlbum', photo.thumb), alt: '', loading: 'lazy' }),
+        sharedThumbImage(photo, 'sharedAlbum', true),
         commentBadge(sharedAlbumStats[photo.key])
       ]));
     });
@@ -475,9 +490,25 @@ byId('sharedPhotoGrid').addEventListener('click', function (e) {
       var stats = sharedAlbumStats[photos[i].key];
       return { caption: photos[i].caption || '', location: photos[i].location || '', label: commentLabel(stats, true, false), unread: stats && stats.unread > 0 };
     },
-    open: function (i) { openView('photo', { owner: photos[i].owner, rid: photos[i].rid }); }
+    open: function (i) { openView('photo', { owner: photos[i].owner, rid: photos[i].rid }); },
+    // Photo qui ne s'affiche pas : relue dans la base, puis (celle enregistrée étant sans doute
+    // abîmée) téléchargée de nouveau.
+    reload: function (i, attempt) {
+      return dbGet('sharedPhotos', photos[i].key).then(function (current) {
+        if (!current) return null;
+        if (attempt >= 1 && current.blob && isSignedIn()) {
+          return downloadSharedPhoto(current, true).then(function (blob) {
+            photos[i].blob = blob;
+            return blob;
+          }, function () { return current.thumb; });
+        }
+        if (current.blob) photos[i].blob = current.blob;
+        return current.blob || current.thumb;
+      });
+    }
   });
-  // Photo pas encore reçue : téléchargée tout de suite (la miniature s'affiche en attendant).
+  // Photo pas encore reçue (d'après la grille) : celle déjà arrivée, sinon téléchargée tout de
+  // suite (la miniature s'affiche en attendant).
   if (!photos[index].blob && isSignedIn()) {
     downloadSharedPhoto(photos[index]).then(function (blob) {
       photos[index].blob = blob;
@@ -489,25 +520,58 @@ byId('sharedPhotoGrid').addEventListener('click', function (e) {
 /* ---------- Mises à jour venues du serveur ---------- */
 onCloudChange(function (what) {
   var view = currentViewName();
+  var sharedView = view === 'shared-albums' || view === 'shared-album';
   if (what === 'status') {
     updateStatusLine();
-    if (view === 'shared-albums' || view === 'shared-album') scheduleSharedRender();
+    // Pendant la réception, seul le décompte « encore à recevoir » change ; à la fin, tout est
+    // réaffiché une fois.
+    if (sharedView) {
+      if (cloudStatus.state === 'syncing') scheduleSharedInfo();
+      else scheduleSharedRender();
+    }
   } else if (what === 'data') {
     if (view === 'sharing') { renderSharing(); renderTopActions(); }
     else if (view === 'share-category' && !shareToggleBusy) renderShareCategory(currentEntry().params);
   } else if (what === 'shared') {
-    if (view === 'shared-albums' || view === 'shared-album') scheduleSharedRender();
+    if (sharedView) scheduleSharedRender();
+  } else if (what.indexOf('photo:') === 0) {
+    if (sharedView) scheduleSharedInfo();
   }
 });
 
-/* Pas plus d'un nouvel affichage par seconde pendant la réception. */
+/* Pas plus d'un nouvel affichage par seconde pendant la réception ; pendant qu'une photo est
+   affichée, il attend qu'elle soit fermée. */
 function scheduleSharedRender() {
   if (sharedRenderTimer) return;
   sharedRenderTimer = setTimeout(function () {
     sharedRenderTimer = null;
+    if (!byId('viewer').hidden) {
+      scheduleSharedRender();
+      return;
+    }
     var entry = currentEntry();
-    if (!byId('viewer').hidden) return; // pas pendant qu'une photo est affichée
     if (entry.name === 'shared-albums') renderSharedAlbums(entry.params);
     else if (entry.name === 'shared-album') renderSharedAlbum(entry.params);
+  }, 1000);
+}
+
+/* Décompte des photos encore à recevoir en taille réelle, sans refaire la grille. */
+function scheduleSharedInfo() {
+  if (sharedInfoTimer) return;
+  sharedInfoTimer = setTimeout(function () {
+    sharedInfoTimer = null;
+    var entry = currentEntry();
+    if (entry.name === 'shared-album') {
+      dbGetAllByIndex('sharedPhotos', 'albumKey', entry.params.album).then(function (photos) {
+        if (currentEntry() !== entry || !sharedAlbumPhotos.length) return;
+        var info = byId('sharedAlbumInfo');
+        info.textContent = sharedInfoText(photos);
+        info.hidden = !info.textContent;
+      });
+    } else if (entry.name === 'shared-albums') {
+      dbGetAllByIndex('sharedPhotos', 'owner', entry.params.owner).then(function (photos) {
+        if (currentEntry() === entry) byId('sharedAlbumsInfo').textContent = sharedInfoText(photos);
+      });
+    }
   }, 1000);
 }

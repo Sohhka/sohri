@@ -24,7 +24,7 @@ contacte aucun serveur : l'accès à Internet ne sert qu'au partage entre proche
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-1.6.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+1. Copier `dist/Sohri-1.7.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
    télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
@@ -247,8 +247,17 @@ projet est dans OneDrive, les fichiers de compilation temporaires sont placés d
 `https://appassets.androidplatform.net/` (`WebViewAssetLoader`). Les données sont dans IndexedDB
 (magasins `notes`, `addresses`, `settings`, `folders` pour les dossiers et les albums, `photos`,
 `documents` pour la description des fichiers et `documentFiles` pour leur contenu ; pour le
-partage, hors sauvegardes : `cloud`, `sharedAlbums`, `sharedPhotos`, `sharedComments`). L'appli
-Android ajoute ce qu'une WebView ne fait pas seule :
+partage, hors sauvegardes : `cloud`, `sharedAlbums`, `sharedPhotos`, `sharedComments`).
+
+Les images (photos, miniatures, pièces jointes) y sont des `Blob`. Safari a un défaut : une image
+lue dans la base puis réenregistrée telle quelle (description modifiée, photo reçue en grand
+ajoutée à sa fiche…) peut devenir illisible à la lecture suivante, pendant quelques secondes. On
+voit alors un carré bleu « ? » à la place de la vignette. `dbPut` enregistre donc toujours des
+copies en mémoire des images (`detachBlobs`, `db.js`). Par précaution, une image qui ne s'affiche
+pas est relue dans la base, ou téléchargée de nouveau, au lieu de montrer l'icône d'image cassée
+(`healingImage`, `ui.js`).
+
+L'appli Android ajoute ce qu'une WebView ne fait pas seule :
 
 | Côté Android                               | Côté page (`window.AndroidBridge` et fonctions globales)                  |
 |--------------------------------------------|---------------------------------------------------------------------------|

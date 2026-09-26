@@ -92,7 +92,13 @@ function renderPhotoDetail(params) {
     }
     setViewTitle(detail.album);
     var img = h('img', { className: 'photo-detail-img', src: blobUrl('photoDetail', detail.image), alt: detail.caption || 'Photo' });
-    img.addEventListener('click', function () { openViewer([detail.image], 0); });
+    // Illisible : relue dans la base (voir healingImage), celle d'un proche retéléchargée au besoin.
+    healingImage(img, 'photoDetail', function (attempt) {
+      return reloadDetailImage(detail, attempt);
+    });
+    img.addEventListener('click', function () {
+      openViewer([detail.image], 0, null, { info: function () { return null; }, open: function () {}, reload: function (i, attempt) { return reloadDetailImage(detail, attempt); } });
+    });
     box.appendChild(img);
     box.appendChild(h('div', { className: 'card caption-card', id: 'photoCaption' }));
     renderCaption();
@@ -111,6 +117,30 @@ function renderPhotoDetail(params) {
         img.src = blobUrl('photoDetail', blob);
       }, function () { /* hors connexion : la miniature reste */ });
     }
+  });
+}
+
+/* Image de la fiche qui ne s'affiche pas : relue dans la base ; celle d'un proche, enregistrée mais
+   sans doute abîmée, est ensuite téléchargée de nouveau. Promesse du Blob (ou null). */
+function reloadDetailImage(detail, attempt) {
+  if (detail.own) {
+    return dbGet('photos', detail.photo.id).then(function (current) {
+      if (!current) return null;
+      detail.photo.blob = current.blob;
+      detail.photo.thumb = current.thumb;
+      detail.image = current.blob;
+      return current.blob;
+    });
+  }
+  return dbGet('sharedPhotos', detail.photoKey).then(function (current) {
+    if (!current) return null;
+    if (attempt >= 1 && current.blob && isSignedIn()) {
+      return downloadSharedPhoto(current, true).then(null, function () { return current.thumb; });
+    }
+    return current.blob || current.thumb;
+  }).then(function (blob) {
+    if (blob) detail.image = blob;
+    return blob;
   });
 }
 
@@ -393,8 +423,10 @@ function renderUnreadComments(container) {
         var list = byPhoto[key].sort(function (a, b) { return a.createdAt - b.createdAt; });
         var last = list[list.length - 1];
         var params = own[key] ? { local: photo.id } : { owner: photo.owner, rid: photo.rid };
+        var thumb = own[key] ? photoThumbImage(photo, 'sharing') : sharedThumbImage(photo, 'sharing');
+        thumb.className = 'row-thumb';
         rows.push({ at: last.createdAt, row: h('div', { className: 'list-row', onclick: function () { openView('photo', params); } }, [
-          h('img', { className: 'row-thumb', src: blobUrl('sharing', photo.thumb || photo.blob), alt: '' }),
+          thumb,
           h('div', { className: 'list-row-main' }, [
             h('p', { className: 'list-row-title', text: last.authorName }),
             h('p', { className: 'list-row-sub clamp-2', text: last.text })

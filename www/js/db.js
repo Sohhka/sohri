@@ -64,16 +64,16 @@ function openDB() {
 
 var dbPromise = openDB().catch(function (err) { console.error('DB indisponible', err); return null; });
 
-/* Prévenus après chaque écriture réussie : fn(noms des magasins modifiés). Sert au partage, qui
-   envoie les albums modifiés. */
+/* Prévenus après chaque écriture réussie : fn(noms des magasins modifiés, remote). Sert au partage,
+   qui envoie les albums modifiés ; remote : changement venu d'un autre appareil (déjà en ligne). */
 var dbChangeListeners = [];
 function onDbChange(fn) {
   dbChangeListeners.push(fn);
 }
-function notifyDbChange(storeNames) {
+function notifyDbChange(storeNames, remote) {
   var names = [].concat(storeNames);
   dbChangeListeners.forEach(function (fn) {
-    try { fn(names); } catch (e) { console.error(e); }
+    try { fn(names, !!remote); } catch (e) { console.error(e); }
   });
 }
 
@@ -176,15 +176,16 @@ function dbDelete(storeName, key) {
 }
 
 /* Plusieurs écritures liées (ex. supprimer un dossier et libérer ses notes) en une seule
-   transaction : tout est enregistré, ou rien. work(tx) lance les requêtes. */
-function dbWrite(storeNames, work) {
+   transaction : tout est enregistré, ou rien. work(tx) lance les requêtes. options.remote :
+   changements reçus d'un autre appareil (voir notifyDbChange). */
+function dbWrite(storeNames, work, options) {
   return dbPromise.then(function (db) {
     return new Promise(function (resolve, reject) {
       if (!db) return reject(new Error('Base de données indisponible'));
       var tx = db.transaction(storeNames, 'readwrite');
       tx.oncomplete = function () {
         resolve();
-        notifyDbChange(storeNames);
+        notifyDbChange(storeNames, options && options.remote);
       };
       tx.onerror = function () { reject(tx.error); };
       tx.onabort = function () { reject(tx.error || new Error('Écriture annulée')); };

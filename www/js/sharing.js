@@ -216,7 +216,7 @@ function renameMe() {
 }
 
 function signOut() {
-  uiConfirm('Se déconnecter ? Ce que tes proches partagent avec toi disparaît de ce téléphone (tu le retrouveras en te reconnectant). Ce que tu partages reste visible pour eux.', 'Se déconnecter').then(function (ok) {
+  uiConfirm('Se déconnecter ? Ce que tes proches partagent avec toi, et les photos venues de tes autres appareils, disparaissent de ce téléphone (tu les retrouveras en te reconnectant). Ce que tu partages reste visible pour eux.', 'Se déconnecter').then(function (ok) {
     if (!ok) return;
     return cloudSignOut().then(function () { refreshView(); });
   });
@@ -350,22 +350,13 @@ function renderShareCategory(params) {
     ]));
   });
   if (sharedWith(category).length) {
-    var here = albumsSource() && albumsSource() === cloudState.deviceId;
-    box.appendChild(h('div', { className: 'card source-card' }, here ? [
-      h('p', { className: 'card-text', text: '📤 Les photos partent de cet appareil.' }),
+    box.appendChild(h('div', { className: 'card source-card' }, [
+      h('p', { className: 'card-text', text: '📱 Tes Images sont les mêmes sur tous les appareils connectés à ton compte : chacun peut en ajouter, les modifier ou en supprimer.' }),
       h('p', { className: 'cloud-status js-cloud-status' })
-    ] : [
-      h('p', { className: 'card-text', text: "📱 Les photos partent d'un autre appareil connecté à ton compte." }),
-      h('button', { type: 'button', className: 'secondary-btn', text: 'Envoyer plutôt celles de cet appareil', onclick: function () {
-        uiConfirm('Les photos partagées seront remplacées par les albums de cet appareil.', 'Remplacer').then(function (ok) {
-          if (!ok) return;
-          return cloudUseThisDevice(category).then(function () { refreshView(); }, function (err) { uiAlert(cloudErrorText(err)); });
-        });
-      } })
     ]));
     updateStatusLine();
   }
-  box.appendChild(h('p', { className: 'hint', text: "Les photos sont envoyées réduites sur le serveur Firebase (Google), avec leur description ; tes proches peuvent les commenter. Tes autres rubriques restent seulement sur ce téléphone. Arrêter tous les partages efface les photos et leurs commentaires du serveur." }));
+  box.appendChild(h('p', { className: 'hint', text: "Les photos sont envoyées réduites sur le serveur Firebase (Google), avec leur description ; tes proches peuvent les commenter. Tes autres appareils en reçoivent une copie. Tes autres rubriques restent seulement sur ce téléphone. Arrêter tous les partages efface les photos et leurs commentaires du serveur (chaque appareil garde les siennes)." }));
 }
 
 function setTogglesDisabled(disabled) {

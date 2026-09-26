@@ -234,18 +234,13 @@ function renderComments() {
     if (cloudEnabled()) box.appendChild(h('p', { className: 'hint', text: 'Partage tes Images (menu Partage) : tes proches verront cette photo et pourront la commenter.' }));
     return;
   }
-  var here = !detail.own || sharingOwnPhotosHere();
-  Promise.all([photoComments(detail.photoKey), detail.own && here ? dbGet('cloud', 'pub:' + detail.rid) : null]).then(function (r) {
+  Promise.all([photoComments(detail.photoKey), detail.own ? dbGet('cloud', 'pub:' + detail.rid) : null]).then(function (r) {
     if (photoDetail !== detail) return;
     var list = r[0];
     box.innerHTML = '';
-    if (!here) {
-      // Mes Images partent d'un autre appareil : les photos de celui-ci ne sont pas en ligne.
-      box.appendChild(h('p', { className: 'hint', text: "Tes Images partagées partent d'un autre appareil : les photos de celui-ci ne sont pas en ligne, tes proches ne les voient pas et ne peuvent pas les commenter. (Partage → Images pour envoyer plutôt celles d'ici.)" }));
-    } else if (detail.own && !r[1]) {
+    if (detail.own && !r[1]) {
       box.appendChild(h('p', { className: 'hint', text: '📤 Photo en cours d\'envoi : elle sera visible (et commentable) par tes proches dans un instant.' }));
     }
-    if (!here && !list.length) return;
     box.appendChild(h('h2', { className: 'section-title', text: list.length ? plural(list.length, 'commentaire', 'commentaires') : 'Commentaires' }));
     if (!list.length) box.appendChild(h('p', { className: 'hint', text: detail.own ? 'Pas encore de commentaire.' : 'Pas encore de commentaire : écris le premier !' }));
     list.forEach(function (c) { box.appendChild(commentRow(detail, c)); });
@@ -446,7 +441,8 @@ onCloudChange(function (what, detail) {
   if (what === 'comments' && detail > 0 && currentViewName() !== 'photo') {
     showToast('💬 ' + plural(detail, 'nouveau commentaire', 'nouveaux commentaires'));
   }
-  if (what === 'comment' || what === 'comments' || what === 'shared' || what === 'data') scheduleCommentRefresh();
+  // 'own' : mes Images changées depuis un autre appareil (albums, photos reçues).
+  if (what === 'comment' || what === 'comments' || what === 'shared' || what === 'data' || what === 'own') scheduleCommentRefresh();
   if (what === 'data' && currentViewName() === 'photo') updateBottomBars();
 });
 onDbChange(function (stores) {

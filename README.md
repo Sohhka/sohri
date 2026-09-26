@@ -118,6 +118,15 @@ Sans compte, rien ne change : l'appli reste entièrement hors connexion. Avec un
 
 Ça marche entre la version web (iPhone) et l'appli Android : le compte est le même partout.
 
+**Mes appareils.** Dès que les Images sont partagées avec au moins un proche, elles sont les mêmes
+sur tous les appareils connectés au compte (iPhone, Android, les deux à la fois). Chacun peut
+ajouter des photos, écrire une description, déplacer, renommer ou supprimer, et les autres
+reprennent ces changements à leur synchronisation. Un appareil qui se connecte pour la première
+fois fusionne ses Images avec celles du compte, sans rien effacer : ce qui n'est que sur lui part,
+ce qui n'est qu'en ligne arrive. Une photo n'est supprimée partout que si on la supprime sur un des
+appareils. Les photos venues d'un autre appareil sont des copies réduites (1600 pixels), comme
+celles des proches.
+
 ### Descriptions, lieux et commentaires (façon Instagram)
 
 - **Description et lieu** (📍, par exemple « Tokyo, Japon ») : tous deux facultatifs. Quand on
@@ -132,9 +141,8 @@ Sans compte, rien ne change : l'appli reste entièrement hors connexion. Avec un
   Partage pour celles des proches), pastille sur la couverture de l'album et sur la photo, liste
   **Nouveaux commentaires** dans Partage, et un message quand l'appli en reçoit. (Pas de
   notification quand l'appli est fermée.)
-- **Plusieurs appareils** : les commentaires de mes photos se lisent et s'écrivent sur l'appareil
-  qui envoie mes Images (Partage → Images l'indique) ; les photos des autres appareils ne sont pas
-  en ligne, leur fiche le dit.
+- **Plusieurs appareils** : les commentaires de mes photos se lisent et s'écrivent sur chacun de mes
+  appareils.
 - **Hors connexion** : un commentaire écrit sans réseau part tout seul au retour d'Internet
   (« ⏳ envoi au retour d'Internet ») ; les commentaires reçus restent lisibles sans réseau.
 - Supprimer une photo efface aussi ses commentaires ; arrêter le partage des Images efface les
@@ -143,15 +151,17 @@ Sans compte, rien ne change : l'appli reste entièrement hors connexion. Avec un
 À savoir :
 
 - Seules les rubriques partagées quittent le téléphone. Arrêter tous les partages d'une rubrique
-  efface ses photos du serveur ; **Supprimer mon compte** efface tout ce qui est en ligne (les
-  données du téléphone restent).
+  efface ses photos du serveur (chaque appareil garde les siennes, et celles déjà reçues des
+  autres) ; **Supprimer mon compte** efface tout ce qui est en ligne (les données du téléphone
+  restent).
 - Serveur : Firebase (Google), formule gratuite, sans carte bancaire : 1 Go pour tout le monde,
   soit environ 3 000 photos partagées. Au-delà, les nouveaux envois sont refusés (aucune facture
   possible).
-- Si le compte est ouvert sur plusieurs appareils, un seul envoie les photos (celui où le partage
-  a été activé) ; « Envoyer plutôt celles de cet appareil » change d'appareil.
-- **Se déconnecter** retire du téléphone ce que les proches y avaient partagé ; tout revient à la
-  reconnexion.
+- **Se déconnecter** (bouton en bas de l'écran Partage) retire du téléphone ce que les proches y
+  avaient partagé et les photos venues des autres appareils du compte ; tout revient à la
+  reconnexion. Les photos ajoutées sur ce téléphone y restent.
+- Les appareils du compte doivent avoir la version 1.7 ou plus récente : les anciennes versions
+  n'envoient plus rien (elles ne connaissaient qu'un seul appareil d'envoi).
 
 ## Organisation du dossier
 

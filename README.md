@@ -34,7 +34,7 @@ les 6 heures). Le reste de l'accès à Internet sert au partage entre proches, a
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-1.9.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+1. Copier `dist/Sohri-2.0.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
    télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
@@ -104,7 +104,10 @@ adresses s'ouvrent dans la même visionneuse.
 Paramètres → **Créer une sauvegarde** enregistre tout (notes, adresses, images, documents, pièces jointes) dans
 un fichier `SOHRI-sauvegarde-AAAA-MM-JJ.zip`, à ranger par exemple sur Google Drive ou iCloud Drive.
 **Restaurer une sauvegarde** remplace alors toutes les données de l'appli par celles du fichier. Une
-sauvegarde faite sur Android se restaure sur l'iPhone, et inversement.
+sauvegarde faite sur Android se restaure sur l'iPhone, et inversement, même si le fichier a été
+transformé en route : sur l'iPhone, toucher un `.zip` dans l'app Fichiers le décompresse en
+dossier, et envoyer ce dossier en refait un zip compressé ; SOHRI le lit aussi. Il faut seulement
+le zip entier (pas le fichier `sohri.json` seul, qui ne contient pas les photos).
 
 À faire avant le départ et de temps en temps pendant le voyage : désinstaller l'appli, ou
 « Vider le stockage » dans les paramètres Android (sur iPhone : supprimer l'icône), efface tout.

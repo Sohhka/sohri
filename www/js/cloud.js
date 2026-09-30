@@ -7,7 +7,8 @@
    en ligne et à la construction de l'APK, jamais dans le dépôt.
 
    Données en ligne : users/{id} (nom, code), ses contacts, et les rubriques qu'il partage (albums,
-   photos en morceaux) ; grants/{propriétaire}_{proche} : rubriques montrées à un proche.
+   photos en morceaux) ; grants/{propriétaire}_{proche} : rubriques montrées à un proche. Toutes
+   ses rubriques s'il les synchronise entre ses appareils (sync.js), visibles de lui seul.
    Sur le téléphone : magasin « cloud » (session, cache, état des envois), « sharedAlbums » et
    « sharedPhotos » (ce que les proches partagent, gardé pour le hors connexion). Rien de tout ça
    n'entre dans les sauvegardes. */
@@ -85,7 +86,9 @@ function cloudFetch(url, options) {
       var message = (error && (error.message || error.status)) || 'HTTP ' + response.status;
       var code = response.status === 403 ? 'denied' : response.status === 404 ? 'not-found'
         : response.status === 401 ? 'auth' : response.status >= 500 || response.status === 429 ? 'server' : 'request';
-      throw cloudError(code, message);
+      var err = cloudError(code, message);
+      err.status = error && error.status; // FAILED_PRECONDITION... (écriture refusée : changé entre-temps)
+      throw err;
     });
   }, function () {
     throw cloudError('offline', 'Pas de connexion Internet');
@@ -194,6 +197,7 @@ function decodeDoc(doc) {
   var data = fromFields(doc.fields);
   data._id = doc.name.split('/').pop();
   data._name = doc.name;
+  data._updateTime = doc.updateTime; // version du document (écritures conditionnelles : sync.js)
   return data;
 }
 
@@ -390,7 +394,7 @@ function createProfile(name, inviter, attempt) {
   if (!inviter) writes.push(fsSet('meta/bootstrap', { uid: cloudSession.uid }));
   else writes.push(fsSet(me + '/contacts/' + inviter.uid, { name: cloudName(inviter.name), code: inviter.code }, { time: ['addedAt'] }));
   return fsCommit(writes).then(function () {
-    cloudState.profile = { name: name, code: code, sources: {} };
+    cloudState.profile = { name: name, code: code, sources: {}, syncAll: false };
     cloudState.contacts = inviter ? [{ uid: inviter.uid, name: cloudName(inviter.name), code: inviter.code }] : [];
     return Promise.all([cloudPut('profile', cloudState.profile), cloudPut('contacts', cloudState.contacts)]);
   }, function (err) {
@@ -412,7 +416,7 @@ function cloudSignIn(email, password) {
   return authRequest('signInWithPassword', { email: email, password: password, returnSecureToken: true }).then(function (data) {
     // Autre compte que le précédent : rien de ce qui le concernait ne doit rester sur le téléphone.
     var other = previous && previous !== data.localId;
-    return (other ? forgetAccountImages(previous).then(clearCloudData) : Promise.resolve()).then(function () {
+    return (other ? forgetAccountData(previous).then(clearCloudData) : Promise.resolve()).then(function () {
       return storeSession(data, email);
     });
   }).then(function () {
@@ -423,7 +427,7 @@ function cloudSignIn(email, password) {
         throw userError("Ce compte n'a pas de profil SOHRI (inscription inachevée ou supprimée).");
       });
     }
-    cloudState.profile = { name: profile.name, code: profile.code, sources: profile.sources || {} };
+    cloudState.profile = profileState(profile);
     return cloudPut('profile', cloudState.profile);
   }).then(function () {
     notifyCloud('data');
@@ -435,16 +439,28 @@ function cloudResetPassword(email) {
   return authRequest('sendOobCode', { requestType: 'PASSWORD_RESET', email: String(email || '').trim() });
 }
 
-/* Déconnexion : le téléphone oublie le compte, tout ce que les proches y avaient partagé et les
-   photos venues de mes autres appareils. Les rubriques partagées restent en ligne (visibles des
-   proches) tant que le compte existe. */
+/* Déconnexion : le téléphone oublie le compte, tout ce que les proches y avaient partagé et ce qui
+   vient de mes autres appareils. Les rubriques partagées restent en ligne (visibles des proches)
+   tant que le compte existe. */
 function cloudSignOut() {
   var uid = cloudSession && cloudSession.uid;
   var running = cloudSyncRunning || Promise.resolve();
   cloudSession = null; // plus rien ne part ni n'arrive (la synchronisation en cours s'arrête)
   return running.then(null, function () {}).then(function () {
-    return forgetAccountImages(uid);
+    return forgetAccountData(uid);
   }).then(clearCloudData).then(function () { notifyCloud('data'); });
+}
+
+/* Photos, notes, adresses et documents venus de mes autres appareils : retirés de ce téléphone (ils
+   restent sur le compte). */
+function forgetAccountData(uid) {
+  return forgetAccountImages(uid).then(function () {
+    return forgetAccountItems(uid);
+  });
+}
+
+function profileState(profile) {
+  return { name: profile.name, code: profile.code, sources: profile.sources || {}, syncAll: !!profile.syncAll };
 }
 
 function forgetAccount() {
@@ -485,7 +501,7 @@ function cloudRename(newName) {
 }
 
 /* Suppression du compte : tout ce qui est en ligne est effacé (mot de passe demandé à nouveau). */
-var MY_COLLECTIONS = ['albums', 'photos', 'photoParts', 'comments', 'contacts'];
+var MY_COLLECTIONS = ['albums', 'photos', 'photoParts', 'comments', 'contacts', 'items', 'blobs', 'blobParts'];
 
 function cloudDeleteAccount(password) {
   var uid = cloudSession.uid;
@@ -600,8 +616,22 @@ function sharedWith(category) {
   return Object.keys(cloudState.myGrants).filter(function (to) { return cloudState.myGrants[to].indexOf(category) >= 0; });
 }
 
+/* Toutes mes rubriques synchronisées entre mes appareils (réglage du compte, voir sync.js) ? Pas
+   pendant leur arrêt : plus rien ne part. */
+var syncAllStopping = false;
+function syncAllEnabled() {
+  return !!(cloudSession && cloudState.profile && cloudState.profile.syncAll) && !syncAllStopping;
+}
+
+/* Mes Images sont en ligne (et les mêmes sur tous mes appareils) si elles sont partagées, ou si
+   toutes mes rubriques sont synchronisées. */
+function ownImagesOnline() {
+  return !!cloudSession && (sharedWith('albums').length > 0 || syncAllEnabled());
+}
+
 /* Montre (ou non) une rubrique à un contact. Le premier partage des Images les met en ligne (et
-   les rend identiques sur tous mes appareils) ; le dernier retiré les efface du serveur. */
+   les rend identiques sur tous mes appareils) ; le dernier retiré les efface du serveur, avec leurs
+   commentaires (seulement les commentaires si toutes mes rubriques sont synchronisées). */
 function cloudSetShare(category, to, enabled) {
   var categories = (cloudState.myGrants[to] || []).filter(function (c) { return c !== category; });
   if (enabled) categories.push(category);
@@ -615,15 +645,24 @@ function cloudSetShare(category, to, enabled) {
     return cloudPut('myGrants', cloudState.myGrants);
   }).then(function () {
     notifyCloud('data');
-    if (!enabled && category === 'albums' && !sharedWith('albums').length) return unpublishAlbums().then(function () { syncNow(); });
+    if (!enabled && category === 'albums' && !sharedWith('albums').length) {
+      return (syncAllEnabled() ? deleteOwnComments() : unpublishAlbums()).then(function () { syncNow(); });
+    }
     syncNow();
+  });
+}
+
+function deleteOwnComments() {
+  var me = userPath();
+  return fsListAll(me, 'comments', true).then(function (docs) {
+    return deleteInBatches(docs.map(function (doc) { return me + '/comments/' + doc._id; }));
   });
 }
 
 function loadMyProfile() {
   return fsGet(userPath()).then(function (profile) {
     if (!profile) throw cloudError('signed-out', 'Profil introuvable');
-    cloudState.profile = { name: profile.name, code: profile.code, sources: profile.sources || {} };
+    cloudState.profile = profileState(profile);
     return cloudPut('profile', cloudState.profile);
   });
 }
@@ -663,6 +702,13 @@ function syncNow() {
         publishError = err;
       });
     })
+    .then(function () {
+      // Mes autres rubriques, si je les synchronise entre mes appareils (sync.js) : de même.
+      return syncOwnItems().then(null, function (err) {
+        if (err.cloud === 'offline' || err.cloud === 'signed-out') throw err;
+        publishError = publishError || err;
+      });
+    })
     .then(sendPendingComments)
     .then(receiveShares)
     .then(syncComments)
@@ -686,14 +732,15 @@ function syncNow() {
   return cloudSyncRunning;
 }
 
-/* Après une modification des albums ou des photos : envoi quelques secondes plus tard. */
+/* Après une modification de ce qui est en ligne (Images, ou toutes mes rubriques) : envoi quelques
+   secondes plus tard. */
 function schedulePublish() {
-  if (!cloudSession || !sharedWith('albums').length) return;
+  if (!cloudSession) return;
   clearTimeout(cloudPublishTimer);
   cloudPublishTimer = setTimeout(syncNow, 3000);
 }
 
-/* ---------- Mes Images, les mêmes sur tous mes appareils (quand elles sont partagées) ----------
+/* ---------- Mes Images, les mêmes sur tous mes appareils (partagées, ou toutes mes rubriques synchronisées) ----------
    Chaque appareil connecté au compte envoie ses changements (albums et photos ajoutés, modifiés,
    supprimés) et reprend ceux des autres. Chaque album et chaque photo a un identifiant tiré de ses
    propres données (date d'ajout...), gardé tel quel sur les autres appareils (champ « rid ») : une
@@ -748,8 +795,8 @@ function putSyncRecords(tx, records) {
 }
 
 function syncOwnImages() {
-  // Images partagées avec personne : rien en ligne, chaque appareil garde les siennes.
-  if (!sharedWith('albums').length) return forgetPublishedState();
+  // Images pas en ligne : chaque appareil garde les siennes.
+  if (!ownImagesOnline()) return leaveImageSync();
   return dropOldSource().then(function () {
     return cloudGet('pubReady');
   }).then(function (ready) {
@@ -771,6 +818,37 @@ function dropOldSource() {
   return fsCommit([fsSet(userPath(), { sources: rest }, { mask: ['sources'] })]).then(function () {
     cloudState.profile.sources = rest;
     return cloudPut('profile', cloudState.profile);
+  });
+}
+
+/* Images plus en ligne (partage et synchronisation arrêtés) : les photos venues de mes autres
+   appareils deviennent celles de ce téléphone (elles ne sont plus sur le compte). */
+function leaveImageSync() {
+  return cloudGet('pubReady').then(function (ready) {
+    return ready ? adoptAccountImages() : null;
+  }).then(forgetPublishedState);
+}
+
+function adoptAccountImages() {
+  return Promise.all([dbGetAll('folders'), dbGetAll('photos')]).then(function (r) {
+    var records = r[0].filter(function (f) { return isAlbum(f) && f.fromAccount; }).map(function (f) { return { store: 'folders', record: f }; })
+      .concat(r[1].filter(function (p) { return p.fromAccount; }).map(function (p) { return { store: 'photos', record: p }; }));
+    var batches = [];
+    for (var i = 0; i < records.length; i += 20) batches.push(records.slice(i, i + 20));
+    // Par petits groupes : les photos sont recopiées en mémoire avant d'être réenregistrées (voir
+    // detachBlobs, db.js).
+    return batches.reduce(function (chain, batch) {
+      return chain.then(function () {
+        return Promise.all(batch.map(function (c) {
+          delete c.record.fromAccount;
+          return detachBlobs(c.record);
+        })).then(function () {
+          return dbWrite(['folders', 'photos'], function (tx) {
+            batch.forEach(function (c) { tx.objectStore(c.store).put(c.record); });
+          }, { remote: true });
+        });
+      });
+    }, Promise.resolve());
   });
 }
 
@@ -957,7 +1035,7 @@ function removeGoneAlbums(rids) {
 /* Photos ajoutées sur mes autres appareils : téléchargées une à une. Une qui ne vient pas
    n'empêche pas les suivantes ; elle est redemandée à la synchronisation suivante. */
 function downloadOwnPhotos() {
-  if (!sharedWith('albums').length) return Promise.resolve();
+  if (!ownImagesOnline()) return Promise.resolve();
   return loadSyncRecords('pend:').then(function (pend) {
     var list = Object.keys(pend).map(function (rid) { return pend[rid]; }).sort(function (a, b) { return (a.takenAt || 0) - (b.takenAt || 0); });
     return list.reduce(function (chain, item, i) {
@@ -1632,8 +1710,10 @@ function commentStats() {
 
 /* ---------- Événements ---------- */
 onDbChange(function (stores, remote) {
-  if (remote) return; // changement reçu d'un autre appareil : déjà en ligne
-  if (stores.indexOf('folders') >= 0 || stores.indexOf('photos') >= 0) schedulePublish();
+  if (remote || !cloudSession) return; // changement reçu d'un autre appareil : déjà en ligne
+  var touches = function (names) { return names.some(function (name) { return stores.indexOf(name) >= 0; }); };
+  if ((ownImagesOnline() && touches(['folders', 'photos'])) ||
+    (syncAllEnabled() && touches(['notes', 'addresses', 'folders', 'documents', 'documentFiles']))) schedulePublish();
 });
 window.addEventListener('online', function () { if (cloudSession) syncNow(); });
 document.addEventListener('visibilitychange', function () {

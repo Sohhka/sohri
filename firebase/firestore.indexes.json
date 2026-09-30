@@ -10,6 +10,21 @@
       "collectionGroup": "photos",
       "fieldPath": "thumb",
       "indexes": []
+    },
+    {
+      "collectionGroup": "items",
+      "fieldPath": "data",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "items",
+      "fieldPath": "blobs",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "blobParts",
+      "fieldPath": "data",
+      "indexes": []
     }
   ]
 }

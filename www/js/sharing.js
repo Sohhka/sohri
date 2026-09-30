@@ -79,6 +79,8 @@ function renderSharing() {
     ]));
   }
 
+  renderSyncAll(box);
+
   box.appendChild(h('h2', { className: 'section-title', text: 'Ce que je partage' }));
   Object.keys(CLOUD_CATEGORIES).forEach(function (category) {
     var people = sharedWith(category);
@@ -106,6 +108,54 @@ function renderSharing() {
   box.appendChild(h('button', { type: 'button', className: 'add-row', text: '＋ Ajouter un contact', onclick: addContact }));
   // Déconnexion, bien visible (aussi dans le menu ⋮ « Mon compte »).
   box.appendChild(h('button', { type: 'button', className: 'secondary-btn sign-out-btn', text: '🚪 Se déconnecter', onclick: signOut }));
+}
+
+/* Mes appareils : toutes mes rubriques, les mêmes partout (réglage du compte, voir sync.js). */
+function renderSyncAll(box) {
+  var enabled = syncAllEnabled();
+  var checkbox = h('input', { type: 'checkbox', className: 'toggle', 'aria-label': 'Synchroniser toutes mes rubriques' });
+  checkbox.checked = enabled;
+  checkbox.disabled = syncAllStopping;
+  checkbox.addEventListener('change', function () {
+    var wanted = checkbox.checked;
+    checkbox.checked = !wanted; // selon la réponse à la question
+    setSyncAll(wanted);
+  });
+  box.appendChild(h('h2', { className: 'section-title', text: 'Mes appareils' }));
+  box.appendChild(h('label', { className: 'list-row toggle-row sync-all-row' }, [
+    h('span', { className: 'row-icon', text: '📱' }),
+    h('span', { className: 'list-row-main' }, [
+      h('span', { className: 'list-row-title', text: 'Synchroniser toutes mes rubriques' }),
+      h('span', { className: 'list-row-sub', text: enabled
+        ? 'Notes, adresses, images et documents : les mêmes sur tous tes appareils connectés à ce compte.'
+        : 'Pour retrouver tes notes, adresses, images et documents sur tous tes appareils connectés à ce compte.' })
+    ]),
+    checkbox
+  ]));
+  if (!enabled) return;
+  box.appendChild(h('p', { className: 'hint', text: "Avec Internet, chaque appareil envoie ses changements et reçoit ceux des autres, tout seul (⟳ en haut pour le faire tout de suite). Tes proches ne voient rien de plus." }));
+  if (itemsLeftHere.length) {
+    box.appendChild(h('p', { className: 'hint', text: '📦 Trop gros pour être synchronisé (fichier de plus de 60 Mo), resté seulement sur cet appareil : ' + itemsLeftHere.join(', ') + '.' }));
+  }
+}
+
+function setSyncAll(wanted) {
+  var question = wanted
+    ? 'Synchroniser toutes tes rubriques ? Tes notes, adresses, images et documents (avec leurs photos et fichiers joints) seront envoyés sur le serveur Firebase (Google), visibles de toi seul, puis reçus par tes autres appareils connectés à ce compte. Rien n\'est effacé : ce que chaque appareil a déjà est réuni. Le serveur gratuit offre 1 Go en tout.'
+    : 'Arrêter la synchronisation ? Ta copie en ligne sera effacée ; chaque appareil garde ce qu\'il a.' + (sharedWith('albums').length ? ' Tes Images restent en ligne pour tes proches.' : '');
+  uiConfirm(question, wanted ? 'Synchroniser' : 'Arrêter', !wanted).then(function (ok) {
+    if (!ok) return;
+    var progress = wanted ? null : showProgress('Arrêt de la synchronisation…');
+    return cloudSetSyncAll(wanted).then(function () {
+      if (progress) progress.close();
+      showToast(wanted ? 'Synchronisation activée' : 'Synchronisation arrêtée');
+    }, function (err) {
+      if (progress) progress.close();
+      uiAlert(cloudErrorText(err));
+    });
+  }).then(function () {
+    if (currentViewName() === 'sharing') renderSharing();
+  });
 }
 
 /* Lignes d'état de la synchronisation (mises à jour sans redessiner l'écran). */
@@ -205,7 +255,7 @@ function renameMe() {
 }
 
 function signOut() {
-  uiConfirm('Se déconnecter ? Ce que tes proches partagent avec toi, et les photos venues de tes autres appareils, disparaissent de ce téléphone (tu les retrouveras en te reconnectant). Ce que tu partages reste visible pour eux.', 'Se déconnecter').then(function (ok) {
+  uiConfirm('Se déconnecter ? Ce que tes proches partagent avec toi, et ce qui vient de tes autres appareils, disparaît de ce téléphone (tu le retrouveras en te reconnectant). Ce que tu partages reste visible pour eux.', 'Se déconnecter').then(function (ok) {
     if (!ok) return;
     return cloudSignOut().then(function () { refreshView(); });
   });
@@ -345,7 +395,7 @@ function renderShareCategory(params) {
     ]));
     updateStatusLine();
   }
-  box.appendChild(h('p', { className: 'hint', text: "Les photos sont envoyées réduites sur le serveur Firebase (Google), avec leur description ; tes proches peuvent les commenter. Tes autres appareils en reçoivent une copie. Tes autres rubriques restent seulement sur ce téléphone. Arrêter tous les partages efface les photos et leurs commentaires du serveur (chaque appareil garde les siennes)." }));
+  box.appendChild(h('p', { className: 'hint', text: "Les photos sont envoyées réduites sur le serveur Firebase (Google), avec leur description ; tes proches peuvent les commenter. Tes autres appareils en reçoivent une copie. Tes proches ne voient jamais tes autres rubriques. Arrêter tous les partages efface les commentaires du serveur, et les photos aussi si tu ne synchronises pas toutes tes rubriques (chaque appareil garde les siennes)." }));
 }
 
 function setTogglesDisabled(disabled) {

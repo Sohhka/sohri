@@ -521,7 +521,10 @@ function saveNote() {
     createdAt: (editingNote && editingNote.createdAt) || now,
     updatedAt: now
   };
-  if (editingNote) note.id = editingNote.id;
+  if (editingNote) {
+    note.id = editingNote.id;
+    keepSyncMarks(note, editingNote);
+  }
   savingNote = true;
   dbPut('notes', note).then(function (id) {
     if (isNew) replaceView('note', { id: id });

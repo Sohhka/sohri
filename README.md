@@ -22,7 +22,8 @@ Appli pour un voyage au Japon, sur **Android** (APK) et sur **iPhone** (version 
 - **Documents** : tous ses fichiers (PDF, images, vidéos, sons, textes…) rangés dans des dossiers
   et **affichés directement dans l'appli**.
 - **Partage** (facultatif) : avec un compte, montrer ses **Images** aux proches de son choix, qui
-  les voient dans leur appli, même hors connexion une fois reçues.
+  les voient dans leur appli, même hors connexion une fois reçues, et retrouver **toutes ses
+  rubriques** (notes, adresses, images, documents) sur tous ses appareils.
 - **Paramètres** : thème **clair**, **sombre** ou automatique ; **sauvegarde** complète dans un fichier,
   et restauration.
 
@@ -30,11 +31,12 @@ Tout fonctionne hors connexion et les données restent sur le téléphone. Avec 
 demande seulement des informations publiques, sans compte ni rien d'envoyé sur soi : le taux du
 jour (Frankfurter, taux de la BCE ; en secours, jsDelivr), la météo de la ville choisie
 (Open-Meteo) et, pour l'appli Android, s'il existe une nouvelle version (GitHub, au plus toutes
-les 6 heures). Le reste de l'accès à Internet sert au partage entre proches, avec un compte.
+les 6 heures). Le reste de l'accès à Internet sert, avec un compte, au partage entre proches et à
+la synchronisation entre ses appareils.
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-2.0.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+1. Copier `dist/Sohri-2.1.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
    télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
@@ -59,7 +61,8 @@ APK : **Mettre à jour** ouvre directement la page de cette version.
 - Les données restent sur l'iPhone, **dans l'appli installée** : elles sont séparées de celles de
   Safari et de celles de l'appli Android. Pour passer de l'un à l'autre : **Créer une sauvegarde**
   d'un côté, **Restaurer une sauvegarde** de l'autre (le fichier `.zip` passe par iCloud Drive,
-  Google Drive, AirDrop, e-mail…).
+  Google Drive, AirDrop, e-mail…), ou, avec un compte, **Synchroniser toutes mes rubriques**
+  (voir « Toutes mes rubriques sur tous mes appareils »).
 - « Partager », « Ouvrir avec une autre appli » et « Enregistrer sous… » passent par la feuille de
   partage de l'iPhone (Enregistrer dans Fichiers, AirDrop, Mail…).
 - Les mises à jour arrivent toutes seules : quand une nouvelle version est en ligne, un bandeau
@@ -137,7 +140,8 @@ Sans compte, rien ne change : l'appli reste entièrement hors connexion. Avec un
 
 Ça marche entre la version web (iPhone) et l'appli Android : le compte est le même partout.
 
-**Mes appareils.** Dès que les Images sont partagées avec au moins un proche, elles sont les mêmes
+**Mes appareils.** Dès que les Images sont partagées avec au moins un proche (ou que toutes les
+rubriques sont synchronisées, voir plus bas), elles sont les mêmes
 sur tous les appareils connectés au compte (iPhone, Android, les deux à la fois). Chacun peut
 ajouter des photos, écrire une description, déplacer, renommer ou supprimer, et les autres
 reprennent ces changements à leur synchronisation. Un appareil qui se connecte pour la première
@@ -145,6 +149,34 @@ fois fusionne ses Images avec celles du compte, sans rien effacer : ce qui n'est
 ce qui n'est qu'en ligne arrive. Une photo n'est supprimée partout que si on la supprime sur un des
 appareils. Les photos venues d'un autre appareil sont des copies réduites (1600 pixels), comme
 celles des proches.
+
+### Toutes mes rubriques sur tous mes appareils
+
+Partage → **Mes appareils** → **Synchroniser toutes mes rubriques** : les notes (avec leurs photos
+et pièces jointes), le carnet d'adresses, les documents, leurs dossiers et les Images sont alors les
+mêmes sur tous les appareils connectés au compte. Le réglage vaut pour le compte : on l'active une
+fois, sur n'importe quel appareil, et les autres s'y mettent à leur prochaine synchronisation.
+
+- Il faut Internet, et être connecté au même compte. Chaque appareil envoie ses changements et
+  reçoit ceux des autres tout seul (à l'ouverture de l'appli, au retour d'Internet, quelques
+  secondes après une modification) ; la flèche ⟳ de l'écran Partage le fait tout de suite.
+- La première fois, rien n'est effacé : ce que chaque appareil a déjà est réuni. Une même note
+  présente des deux côtés (par exemple après une sauvegarde restaurée sur les deux) n'est gardée
+  qu'une fois, dans sa version la plus récente.
+- Ensuite, un ajout, une modification, un renommage, un déplacement ou une suppression faits sur
+  un appareil arrivent sur les autres. Une même note modifiée sur deux appareils avant qu'ils se
+  synchronisent : la modification la plus récente l'emporte. Une note supprimée sur un appareil
+  mais modifiée sur un autre entre-temps est gardée : rien ne se perd.
+- Les fichiers (photos des notes, pièces jointes, documents) ne partent qu'une fois, même s'ils
+  servent à plusieurs endroits. Un fichier de plus de 60 Mo reste seulement sur l'appareil où il
+  est (l'écran Partage le signale). Les photos des Images arrivent réduites (1600 pixels) sur les
+  autres appareils ; notes, adresses et documents arrivent tels quels.
+- Ce qui est en ligne n'est visible que de soi : même les proches qui voient les Images n'ont
+  accès à rien d'autre. Les réglages (thème, taux, ville de la météo) restent propres à chaque
+  appareil.
+- **Arrêter** (décocher) efface la copie en ligne, sauf les Images si elles sont partagées ;
+  chaque appareil garde tout ce qu'il a.
+- Tous les appareils du compte doivent avoir la version 2.1 ou plus récente.
 
 ### Descriptions, lieux et commentaires (façon Instagram)
 
@@ -165,20 +197,22 @@ celles des proches.
 - **Hors connexion** : un commentaire écrit sans réseau part tout seul au retour d'Internet
   (« ⏳ envoi au retour d'Internet ») ; les commentaires reçus restent lisibles sans réseau.
 - Supprimer une photo efface aussi ses commentaires ; arrêter le partage des Images efface les
-  photos **et** les commentaires du serveur.
+  photos **et** les commentaires du serveur (seulement les commentaires si toutes les rubriques
+  sont synchronisées : les photos restent pour mes appareils).
 
 À savoir :
 
-- Seules les rubriques partagées quittent le téléphone. Arrêter tous les partages d'une rubrique
-  efface ses photos du serveur (chaque appareil garde les siennes, et celles déjà reçues des
-  autres) ; **Supprimer mon compte** efface tout ce qui est en ligne (les données du téléphone
-  restent).
-- Serveur : Firebase (Google), formule gratuite, sans carte bancaire : 1 Go pour tout le monde,
-  soit environ 3 000 photos partagées. Au-delà, les nouveaux envois sont refusés (aucune facture
-  possible).
+- Seules les rubriques partagées (ou synchronisées entre mes appareils) quittent le téléphone.
+  Arrêter tous les partages d'une rubrique efface ses photos du serveur (chaque appareil garde les
+  siennes, et celles déjà reçues des autres) ; **Supprimer mon compte** efface tout ce qui est en
+  ligne (les données du téléphone restent).
+- Serveur : Firebase (Google), formule gratuite, sans carte bancaire : 1 Go pour tout le monde
+  (photos partagées et rubriques synchronisées), soit environ 3 000 photos partagées. Au-delà, les
+  nouveaux envois sont refusés (aucune facture possible).
 - **Se déconnecter** (bouton en bas de l'écran Partage) retire du téléphone ce que les proches y
-  avaient partagé et les photos venues des autres appareils du compte ; tout revient à la
-  reconnexion. Les photos ajoutées sur ce téléphone y restent.
+  avaient partagé et ce qui vient des autres appareils du compte (photos, notes…) ; tout revient à
+  la reconnexion. Ce qui a été ajouté sur ce téléphone y reste, comme ce qui y a été modifié sans
+  avoir encore pu partir.
 - Les appareils du compte doivent avoir la version 1.7 ou plus récente : les anciennes versions
   n'envoient plus rien (elles ne connaissaient qu'un seul appareil d'envoi).
 
@@ -211,7 +245,8 @@ Sohri/
 │       ├── backup.js        sauvegarde et restauration (.zip)
 │       ├── settings.js      Paramètres
 │       ├── cloud.js         partage : comptes, contacts, envoi et réception (API de Firebase)
-│       ├── sharing.js       partage : écrans (compte, contacts, albums reçus)
+│       ├── sync.js          toutes mes rubriques sur tous mes appareils (notes, adresses, documents)
+│       ├── sharing.js       partage : écrans (compte, contacts, mes appareils, albums reçus)
 │       ├── comments.js      fiche d'une photo : description et commentaires
 │       ├── cloud-config.js  projet Firebase (local, jamais dans le dépôt : voir plus bas)
 │       ├── app.js           menu, bouton retour, version web (hors connexion, mises à jour,
@@ -333,13 +368,25 @@ membre montre à un proche. Les suppressions laissent une trace datée : chaque 
 que ce qui a changé depuis sa dernière visite. Les commentaires écrits hors connexion attendent dans
 le magasin `sharedComments` (`pending`) jusqu'au retour du réseau.
 
+Avec « Synchroniser toutes mes rubriques » (champ `syncAll` du profil), `sync.js` ajoute, visibles
+du seul propriétaire : `items` (une note, une adresse, un dossier ou un document, décrit en JSON,
+avec les empreintes de ses fichiers ; identifiant tiré de sa date de création, le même sur tous
+les appareils), `blobs` (un fichier, nommé par son empreinte SHA-256 : un contenu identique n'est
+envoyé qu'une fois) et `blobParts` (ses morceaux de moins de 1 Mo). Chaque appareil garde, dans
+le magasin `cloud`, l'empreinte de chaque élément au dernier échange : ce qui n'a changé qu'ici
+part, ce qui n'a changé qu'ailleurs arrive, et, changé des deux côtés, le plus récent l'emporte.
+Une fois par jour, les fichiers en ligne dont plus aucun élément n'a besoin sont effacés.
+
 **Qui peut faire quoi** est décidé par le serveur, dans `firebase/firestore.rules` : chacun n'écrit
 que chez lui, ne lit que ce qu'on lui a partagé, et l'inscription demande le code d'un membre.
 Pour les installer après une modification (une fois connecté avec `npx firebase-tools login`) :
 
 ```
-npx firebase-tools deploy --only firestore:rules --config firebase/firebase.json --project <identifiant du projet>
+npx firebase-tools deploy --only firestore --config firebase/firebase.json --project <identifiant du projet>
 ```
+
+(`--only firestore` installe aussi `firebase/firestore.indexes.json`, qui évite d'indexer le
+contenu des photos, des fichiers et des éléments synchronisés.)
 
 **Configuration** : `www/js/cloud-config.js` (`window.SOHRI_CLOUD = { apiKey, projectId }`) est
 exclu du dépôt. En local, il sert à construire l'APK ; pour le site, GitHub l'écrit à partir du

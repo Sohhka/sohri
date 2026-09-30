@@ -77,18 +77,23 @@ service cloud.firestore {
           && existsAfter(bootstrapDoc()) && getAfter(bootstrapDoc()).data.uid == me();
       }
 
+      // syncAll : toutes mes rubriques synchronisées entre mes appareils (réglage du compte).
+      function validSyncAll(data) { return !('syncAll' in data) || data.syncAll is bool; }
+
       allow get: if isMember();
       allow list: if isMember() && resource.data.invitedBy == me(); // proches inscrits avec mon code
       allow create: if signedIn() && uid == me()
         && request.resource.data.keys().hasAll(['name', 'code', 'invitedBy', 'invitedWith', 'createdAt'])
-        && onlyKeys(request.resource.data, ['name', 'code', 'invitedBy', 'invitedWith', 'createdAt', 'sources'])
+        && onlyKeys(request.resource.data, ['name', 'code', 'invitedBy', 'invitedWith', 'createdAt', 'sources', 'syncAll'])
         && validText(request.resource.data.name, 40) && validCode(request.resource.data.code)
         && request.resource.data.createdAt == request.time && validSources(request.resource.data)
+        && validSyncAll(request.resource.data)
         && existsAfter(codeDoc(request.resource.data.code))
         && (invited(request.resource.data) || founder(request.resource.data));
       allow update: if signedIn() && uid == me()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'sources'])
-        && validText(request.resource.data.name, 40) && validSources(request.resource.data);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'sources', 'syncAll'])
+        && validText(request.resource.data.name, 40) && validSources(request.resource.data)
+        && validSyncAll(request.resource.data);
       allow delete: if signedIn() && uid == me();
 
       // Contacts : visibles de leur seul propriétaire.
@@ -151,6 +156,35 @@ service cloud.firestore {
           && request.resource.data.index is int && request.resource.data.index >= 0 && request.resource.data.index < 20
           && request.resource.data.data is bytes && request.resource.data.data.size() <= 950000;
         allow delete: if signedIn() && uid == me();
+      }
+
+      // Toutes mes rubriques entre mes appareils (réglage syncAll) : notes, adresses, dossiers et
+      // documents (items : description en JSON, et empreintes de leurs fichiers), leurs fichiers
+      // (blobs : un par contenu, nommé par son empreinte SHA-256) et leurs morceaux (blobParts).
+      // Visibles de leur seul propriétaire : jamais des proches, même de ceux qui voient ses Images.
+      match /items/{itemId} {
+        allow read, delete: if signedIn() && uid == me();
+        allow create, update: if writesOwn(uid) && itemId.size() <= 80 && (tombstone(request.resource.data) || (
+          onlyKeys(request.resource.data, ['kind', 'data', 'blobs', 'updatedAt'])
+          && request.resource.data.kind in ['note', 'address', 'folder', 'document']
+          && request.resource.data.data is string && request.resource.data.data.size() <= 900000
+          && request.resource.data.blobs is list && request.resource.data.blobs.size() <= 500
+          && request.resource.data.updatedAt == request.time));
+      }
+      match /blobs/{blobId} {
+        allow read, delete: if signedIn() && uid == me();
+        allow create, update: if writesOwn(uid) && blobId.matches('[0-9a-f]{64}')
+          && onlyKeys(request.resource.data, ['size', 'type', 'parts', 'createdAt'])
+          && request.resource.data.size is int && request.resource.data.size >= 0 && request.resource.data.size <= 62914560
+          && request.resource.data.parts is int && request.resource.data.parts >= 0 && request.resource.data.parts <= 70
+          && request.resource.data.type is string && request.resource.data.type.size() <= 200
+          && request.resource.data.createdAt == request.time;
+      }
+      match /blobParts/{partId} {
+        allow read, delete: if signedIn() && uid == me();
+        allow create, update: if writesOwn(uid) && partId.matches('[0-9a-f]{64}-[0-9]{1,2}')
+          && onlyKeys(request.resource.data, ['data'])
+          && request.resource.data.data is bytes && request.resource.data.data.size() <= 950000;
       }
     }
 

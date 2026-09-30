@@ -62,6 +62,7 @@ function renameFolder(folder) {
       if (!answer || !answer.value) return;
       folder.name = answer.value;
       folder.icon = answer.icon || folder.icon;
+      folder.updatedAt = Date.now(); // synchronisation entre mes appareils : le plus récent l'emporte
       return dbPut('folders', folder).then(refreshView);
     })
     .catch(function (err) {

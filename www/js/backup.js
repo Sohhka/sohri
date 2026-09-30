@@ -348,9 +348,9 @@ function restoreBackup(file) {
       if (!ok) return;
       progress = showProgress('Restauration en cours…');
       return dbReplaceAll(backup.data).then(function () {
-        // Images partagées : la sauvegarde sera fusionnée avec celles du compte (rien n'est effacé
-        // en ligne parce qu'il manque dans la sauvegarde).
-        return forgetPublishedState().then(null, function (err) { console.error(err); });
+        // Images partagées, rubriques synchronisées : la sauvegarde sera fusionnée avec ce qu'a le
+        // compte (rien n'est effacé en ligne parce qu'il manque dans la sauvegarde).
+        return Promise.all([forgetPublishedState(), forgetItemState()]).then(null, function (err) { console.error(err); });
       }).then(function () {
         location.reload();
       }, function (err) {

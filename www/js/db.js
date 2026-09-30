@@ -142,6 +142,14 @@ function dbChangedRecords(storeName, change) {
   });
 }
 
+/* Enregistrement réécrit en entier (formulaire) : il garde ses marques de synchronisation entre mes
+   appareils (voir sync.js), son identifiant commun et son appareil d'origine. */
+function keepSyncMarks(record, previous) {
+  if (previous.rid) record.rid = previous.rid;
+  if (previous.fromAccount) record.fromAccount = previous.fromAccount;
+  return record;
+}
+
 function dbPut(storeName, value) {
   return detachBlobs(value).then(function () {
     return dbPromise;

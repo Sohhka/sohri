@@ -576,6 +576,7 @@ img.is-missing { opacity: 0; }
 .link-btn { padding: 8px 2px; border: none; background: none; color: var(--accent); font-weight: 700; font-size: 0.92rem; }
 .cloud-status .link-btn { padding: 0; font-size: inherit; }
 .toggle-row { cursor: pointer; }
+.toggle-row .list-row-title, .toggle-row .list-row-sub { display: block; }
 .toggle { flex: 0 0 auto; width: 24px; height: 24px; margin: 0 6px 0 0; accent-color: var(--accent); }
 .source-card { margin-top: 18px; }
 .source-card .card-text { font-size: 0.95rem; }

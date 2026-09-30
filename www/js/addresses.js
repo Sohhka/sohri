@@ -362,7 +362,10 @@ function saveAddress() {
   entry.attachments = currentAddressFiles.slice();
   entry.createdAt = (editingAddress && editingAddress.createdAt) || now;
   entry.updatedAt = now;
-  if (editingAddress) entry.id = editingAddress.id;
+  if (editingAddress) {
+    entry.id = editingAddress.id;
+    keepSyncMarks(entry, editingAddress);
+  }
   savingAddress = true;
   dbPut('addresses', entry).then(function (id) {
     if (isNew) replaceView('address', { id: id });

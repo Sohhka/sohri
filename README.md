@@ -3,7 +3,14 @@
 Appli pour un voyage au Japon, sur **Android** (APK) et sur **iPhone** (version web installable,
 **https://sohhka.github.io/sohri/**) :
 
-- **Convertisseur ¥ → €**, avec un taux modifiable et mémorisé.
+- **Convertisseur ¥ → €** : le **taux du jour** (Banque centrale européenne) se met à jour tout seul
+  dès qu'il y a Internet (on peut aussi le modifier à la main, par exemple pour celui de sa carte :
+  il reste jusqu'au prochain taux publié), et juste en dessous **l'heure au Japon et en France**
+  (24 h, heure d'été comprise, mise à jour en direct, sans Internet).
+- **Météo & heure** : l'heure au Japon et en France, et la **météo de la semaine en cours** (du
+  lundi au dimanche) dans la ville choisie (Tokyo au départ, liste des villes du Japon ou
+  recherche). Gardée sur le téléphone pour être consultable hors connexion, elle se met à jour dès
+  qu'il y a Internet, même une minute.
 - **Notes** rangées dans des **dossiers** (Tokyo, Réservations…), avec mise en forme (titres, gras,
   listes, **cases à cocher**…), **emojis**, photos, **pièces jointes** (PDF de billets…), liées à une
   adresse. Export d'une note en fichier `.md`.
@@ -19,12 +26,15 @@ Appli pour un voyage au Japon, sur **Android** (APK) et sur **iPhone** (version 
 - **Paramètres** : thème **clair**, **sombre** ou automatique ; **sauvegarde** complète dans un fichier,
   et restauration.
 
-Tout fonctionne hors connexion et les données restent sur le téléphone. Sans compte, l'appli ne
-contacte aucun serveur : l'accès à Internet ne sert qu'au partage entre proches.
+Tout fonctionne hors connexion et les données restent sur le téléphone. Avec Internet, l'appli
+demande seulement des informations publiques, sans compte ni rien d'envoyé sur soi : le taux du
+jour (Frankfurter, taux de la BCE ; en secours, jsDelivr), la météo de la ville choisie
+(Open-Meteo) et, pour l'appli Android, s'il existe une nouvelle version (GitHub, au plus toutes
+les 6 heures). Le reste de l'accès à Internet sert au partage entre proches, avec un compte.
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-1.8.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+1. Copier `dist/Sohri-1.9.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
    télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
@@ -32,7 +42,9 @@ contacte aucun serveur : l'accès à Internet ne sert qu'au partage entre proche
    une appli qui ne vient pas du Play Store.
 
 Il faut Android 8.0 ou plus récent. Une nouvelle version s'installe **par-dessus** l'ancienne :
-notes, adresses, images et documents sont conservés.
+notes, adresses, images et documents sont conservés. Depuis la version 1.9, l'appli prévient
+elle-même (bandeau en bas de l'écran) quand une nouvelle version est publiée sur GitHub, avec son
+APK : **Mettre à jour** ouvre directement la page de cette version.
 
 ## Installer l'appli sur l'iPhone
 
@@ -187,7 +199,8 @@ Sohri/
 │       │                    feuille de partage de l'iPhone
 │       ├── docviewer.js     visionneuse de documents (PDF, image, vidéo, son, texte)
 │       ├── folders.js       dossiers (notes, documents) et albums
-│       ├── converter.js     convertisseur ¥ → €
+│       ├── converter.js     convertisseur ¥ → € (taux du jour) et heures du Japon et de la France
+│       ├── weather.js       Météo & heure : météo de la semaine (Open-Meteo)
 │       ├── notes.js         notes
 │       ├── addresses.js     carnet d'adresses
 │       ├── gallery.js       Images : albums et photos

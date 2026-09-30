@@ -138,6 +138,70 @@ function registerServiceWorker() {
   });
 }
 
+/* ---------- Appli Android : nouvelle version publiée sur GitHub ----------
+   Vérifiée avec Internet (au lancement, au retour dans l'appli, au plus toutes les 6 heures) ;
+   proposée par le même bandeau que la version web, et « Mettre à jour » ouvre directement la page
+   de la release, où l'on télécharge l'APK. « × » la fait oublier 3 jours. */
+var RELEASES_API = 'https://api.github.com/repos/Sohhka/sohri/releases/latest';
+var UPDATE_CHECK_EVERY = 6 * 3600000;
+var UPDATE_LATER = { closed: 3 * 86400000, opened: 3600000 };
+
+function readPref(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
+}
+function writePref(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* stockage indisponible */ }
+}
+
+/* « 1.10 » est plus récent que « 1.9 » (et « v1.9 » vaut « 1.9 »). */
+function isNewerVersion(candidate, current) {
+  var a = String(candidate || '').replace(/^v/i, '').split('.');
+  var b = String(current || '').replace(/^v/i, '').split('.');
+  for (var i = 0; i < Math.max(a.length, b.length); i++) {
+    var x = parseInt(a[i], 10) || 0;
+    var y = parseInt(b[i], 10) || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+function checkAndroidUpdate() {
+  var last = readPref('sohri.updateCheck') || 0;
+  if (Date.now() - last < UPDATE_CHECK_EVERY || navigator.onLine === false) return offerAndroidUpdate();
+  fetch(RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } }).then(function (response) {
+    return response.ok ? response.json() : null;
+  }).then(function (release) {
+    writePref('sohri.updateCheck', Date.now());
+    // Seulement une vraie version publiée, avec son APK (pas un brouillon en cours de préparation).
+    var apk = release && !release.draft && !release.prerelease && (release.assets || []).some(function (a) { return /\.apk$/i.test(a.name || ''); });
+    if (apk) writePref('sohri.update', { version: release.tag_name, url: release.html_url });
+    offerAndroidUpdate();
+  }, function () { /* hors connexion : on réessaiera */ });
+}
+
+function offerAndroidUpdate() {
+  var update = readPref('sohri.update');
+  var current = window.AndroidBridge.getAppVersion();
+  if (!update || !isNewerVersion(update.version, current)) return;
+  var later = readPref('sohri.updateLater');
+  if (later && later.version === update.version && Date.now() < later.until) return;
+  if (!byId('banner').hidden) return; // un autre message est déjà affiché
+  var version = String(update.version).replace(/^v/i, '');
+  var postpone = function (delay) { writePref('sohri.updateLater', { version: update.version, until: Date.now() + delay }); };
+  showBanner('SOHRI ' + version + ' est disponible (tu as la ' + current + ').', 'Mettre à jour', function () {
+    postpone(UPDATE_LATER.opened); // le temps de télécharger et d'installer, sans le bandeau à chaque retour
+    openExternal(update.url || 'https://github.com/Sohhka/sohri/releases/latest');
+  }, function () { postpone(UPDATE_LATER.closed); });
+}
+
+if (window.AndroidBridge && window.AndroidBridge.getAppVersion) {
+  checkAndroidUpdate();
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') checkAndroidUpdate();
+  });
+  window.addEventListener('online', checkAndroidUpdate);
+}
+
 if (IS_WEB) {
   if (window.visualViewport) {
     var fitPending = false;

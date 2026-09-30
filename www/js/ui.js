@@ -106,6 +106,24 @@ function healingImage(img, group, reload) {
   return img;
 }
 
+/* Données publiques (météo, taux de change) : promesse du JSON, erreur au-delà de 15 s (réseau
+   présent mais sans Internet, par exemple). */
+function fetchJson(url) {
+  return new Promise(function (resolve, reject) {
+    var timer = setTimeout(function () { reject(new Error('Délai dépassé')); }, 15000);
+    fetch(url).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    }).then(function (json) {
+      clearTimeout(timer);
+      resolve(json);
+    }, function (err) {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
 /* Ouvre un lien (itinéraire Google Maps, site web, téléphone...) dans l'appli adaptée du téléphone. */
 function openExternal(url) {
   if (window.AndroidBridge) window.AndroidBridge.openExternal(url);
@@ -328,6 +346,7 @@ function showBanner(text, actionLabel, onAction, onClose) {
   bannerOnClose = onClose || null;
   byId('banner').hidden = false;
   byId('app').classList.add('has-banner');
+  if (window.fitClock) fitClock(); // moins de place : l'heure sous le convertisseur s'adapte
 }
 
 function closeBanner() {
@@ -335,6 +354,7 @@ function closeBanner() {
   byId('app').classList.remove('has-banner');
   bannerAction = null;
   bannerOnClose = null;
+  if (window.fitClock) fitClock();
 }
 
 byId('bannerActionBtn').addEventListener('click', function () {

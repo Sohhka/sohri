@@ -197,10 +197,60 @@ main {
   background: transparent; color: var(--text); font-weight: 700; font-size: 1rem;
 }
 .footnote { text-align: center; color: var(--text-muted); font-size: 0.78rem; margin-top: 22px; line-height: 1.4; }
+/* Heure au Japon et en France, sous le convertisseur */
+.world-clock {
+  display: flex; align-items: center; gap: 8px; margin-top: 20px; padding: 14px 12px;
+  border-radius: 18px; background: var(--surface); box-shadow: var(--shadow);
+}
+.clock-zone { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.clock-place { font-size: 0.82rem; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+.clock-time { font-size: 2.1rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.clock-day { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+.clock-gap {
+  flex: 0 0 auto; padding: 4px 9px; border-radius: 100px; background: var(--accent-soft);
+  color: var(--accent); font-size: 0.74rem; font-weight: 800; white-space: nowrap;
+}
+/* Écran trop peu haut pour la carte entière : les deux heures sur une ligne (voir fitClock). */
+.world-clock.is-compact { margin-top: 12px; padding: 8px 12px; }
+.world-clock.is-compact .clock-zone { flex-direction: row; justify-content: center; align-items: baseline; gap: 6px; }
+.world-clock.is-compact .clock-time { font-size: 1.25rem; }
+.world-clock.is-compact .clock-day { display: none; }
+/* ---------- Météo & heure ---------- */
+.weather-clock { margin: 0 0 20px; }
+.weather-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 4px 10px; }
+.weather-city { margin: 0; min-width: 0; font-size: 1.15rem; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weather-head .link-btn { flex: 0 0 auto; padding: 4px 0; }
+.weather-now {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 12px; padding: 14px 18px;
+  border-radius: 18px; background: var(--surface); box-shadow: var(--shadow);
+}
+.weather-now-icon { font-size: 2.5rem; line-height: 1; }
+.weather-now-main { flex: 1; min-width: 0; }
+.weather-now-temp { margin: 0; font-size: 1.9rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.weather-now-text { margin: 2px 0 0; font-size: 0.88rem; color: var(--text-muted); }
+.weather-now-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; }
+.weather-week { border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.weather-day {
+  display: grid; grid-template-columns: minmax(0, 1fr) 2.2rem 4.6rem 5.6rem; align-items: center; gap: 8px;
+  padding: 10px 16px; border-bottom: 1px solid var(--divider);
+}
+.weather-day:last-child { border-bottom: none; }
+.weather-day.is-today { background: var(--accent-soft); }
+.weather-day.is-today .weather-day-name { color: var(--accent); }
+.weather-day.is-past { opacity: 0.5; }
+.weather-day-name { font-weight: 700; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weather-day-icon { font-size: 1.4rem; text-align: center; }
+.weather-day-rain { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+.weather-day-temps { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.weather-min { color: var(--text-muted); font-weight: 600; }
+.weather-status { margin-top: 14px; }
+.weather-credit { margin-top: 4px; font-size: 0.72rem; }
+
 /* Écran peu haut (petit téléphone) : convertisseur plus compact, pour tenir sans défilement. */
 @media (max-height: 640px) {
   #view-converter .field { padding: 8px 2px; }
   #view-converter .footnote { margin-top: 12px; }
+  #view-converter .world-clock { margin-top: 12px; }
 }
 
 /* ---------- Recherche, filtres ---------- */

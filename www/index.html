@@ -81,6 +81,7 @@
       <div class="drawer-panel">
         <p class="drawer-title">SOHRI</p>
         <button class="drawer-item" type="button" data-section="converter"><span class="drawer-icon">💴</span>Convertisseur ¥ → €</button>
+        <button class="drawer-item" type="button" data-section="weather"><span class="drawer-icon">🌤️</span>Météo &amp; heure</button>
         <button class="drawer-item" type="button" data-section="notes"><span class="drawer-icon">📝</span>Notes</button>
         <button class="drawer-item" type="button" data-section="addresses"><span class="drawer-icon">📍</span>Carnet d'adresses</button>
         <button class="drawer-item" type="button" data-section="albums"><span class="drawer-icon">🖼️</span>Images</button>
@@ -123,7 +124,39 @@
             <span class="currency-sign">€</span>
           </div>
         </div>
-        <p class="footnote">Fonctionne sans connexion. Taux indicatif — mets-le à jour avant le départ.</p>
+        <!-- Heure au Japon et en France : calculée par le téléphone, sans Internet -->
+        <div id="worldClock" class="world-clock" role="group" aria-label="Heure au Japon et en France">
+          <div class="clock-zone">
+            <span class="clock-place">🇯🇵 Japon</span>
+            <span id="clockJapan" class="clock-time" data-clock="japan">--:--</span>
+            <span id="clockJapanDay" class="clock-day" data-clock-day="japan"></span>
+          </div>
+          <span id="clockGap" class="clock-gap" data-clock-gap></span>
+          <div class="clock-zone">
+            <span class="clock-place">🇫🇷 France</span>
+            <span id="clockFrance" class="clock-time" data-clock="france">--:--</span>
+            <span id="clockFranceDay" class="clock-day" data-clock-day="france"></span>
+          </div>
+        </div>
+        <p id="rateNote" class="footnote">Taux indicatif : il se met à jour tout seul dès que tu as Internet. Fonctionne sans connexion.</p>
+      </section>
+
+      <!-- MÉTÉO ET HEURE : heures (sans Internet) et météo de la semaine (gardée sur le téléphone) -->
+      <section id="view-weather" class="view">
+        <div class="world-clock weather-clock" role="group" aria-label="Heure au Japon et en France">
+          <div class="clock-zone">
+            <span class="clock-place">🇯🇵 Japon</span>
+            <span class="clock-time" data-clock="japan">--:--</span>
+            <span class="clock-day" data-clock-day="japan"></span>
+          </div>
+          <span class="clock-gap" data-clock-gap></span>
+          <div class="clock-zone">
+            <span class="clock-place">🇫🇷 France</span>
+            <span class="clock-time" data-clock="france">--:--</span>
+            <span class="clock-day" data-clock-day="france"></span>
+          </div>
+        </div>
+        <div id="weatherContent"></div>
       </section>
 
       <!-- NOTES : dossiers et notes (ou contenu d'un dossier) -->
@@ -427,6 +460,7 @@
 <script src="js/docviewer.js"></script>
 <script src="js/folders.js"></script>
 <script src="js/converter.js"></script>
+<script src="js/weather.js"></script>
 <script src="js/notes.js"></script>
 <script src="js/addresses.js"></script>
 <script src="js/gallery.js"></script>

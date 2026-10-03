@@ -395,20 +395,21 @@ var viewerSwipe = null;
 var viewerDetails = null;
 var viewerRetry = { index: -1, tries: 0, timer: null };
 
-/* items : liste de Blob (ou d'URL) ; actions : boutons { icon, label, onClick(index) } en haut à droite ;
-   details (albums) : { info(index) → { caption, label, unread }, open(index), reload(index, essai) }
-   : description en bas de la photo, bouton (commentaires...) qui ouvre la fiche de la photo, et
-   image de remplacement si celle affichée ne se charge pas (promesse d'un Blob). */
+/* items : liste de Blob (ou d'URL) ; actions : boutons { icon (ou svg), label, onClick(index) } en
+   haut à droite ; details (albums) : { info(index) → { caption, label, unread }, open(index),
+   reload(index, essai) } : description en bas de la photo, bouton (commentaires...) qui ouvre la
+   fiche de la photo, et image de remplacement si celle affichée ne se charge pas (promesse d'un Blob). */
 function openViewer(items, index, actions, details) {
   viewerItems = items.slice();
   viewerDetails = details || null;
   var actionsEl = byId('viewerActions');
   actionsEl.innerHTML = '';
   (actions || []).forEach(function (action) {
-    actionsEl.appendChild(h('button', {
-      type: 'button', className: 'viewer-btn', 'aria-label': action.label, title: action.label, text: action.icon,
+    var button = actionsEl.appendChild(h('button', {
+      type: 'button', className: 'viewer-btn', 'aria-label': action.label, title: action.label, text: action.svg ? '' : action.icon,
       onclick: function (e) { e.stopPropagation(); action.onClick(viewerIndex); }
     }));
+    if (action.svg) button.innerHTML = action.svg; // icône dessinée : la même sur tous les téléphones
   });
   viewerEl.hidden = false;
   viewerShow(index || 0);

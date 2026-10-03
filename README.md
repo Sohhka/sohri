@@ -18,7 +18,8 @@ Appli pour un voyage au Japon, sur **Android** (APK) et sur **iPhone** (version 
   adresse en japonais à **montrer au chauffeur de taxi**, téléphone, site web, pièces jointes, notes liées.
 - **Images** : des albums (« Tokyo », « Shibuya »…) pour ranger ses photos, classées par jour de prise de
   vue, avec une **description** et un **lieu** par photo et, une fois partagées, les **commentaires**
-  des proches.
+  des proches. En plein écran, **Télécharger** met la photo dans la galerie du téléphone (aussi pour
+  les photos des proches et celles des notes).
 - **Documents** : tous ses fichiers (PDF, images, vidéos, sons, textes…) rangés dans des dossiers
   et **affichés directement dans l'appli**.
 - **Partage** (facultatif) : avec un compte, montrer ses **Images** aux proches de son choix, qui
@@ -36,7 +37,7 @@ la synchronisation entre ses appareils.
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-2.1.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+1. Copier `dist/Sohri-2.2.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
    télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
@@ -65,6 +66,10 @@ APK : **Mettre à jour** ouvre directement la page de cette version.
   (voir « Toutes mes rubriques sur tous mes appareils »).
 - « Partager », « Ouvrir avec une autre appli » et « Enregistrer sous… » passent par la feuille de
   partage de l'iPhone (Enregistrer dans Fichiers, AirDrop, Mail…).
+- **Télécharger** une photo (bouton ⬇ en plein écran) : Apple ne laisse pas une appli web écrire
+  directement dans Photos ; la feuille de partage s'ouvre, et **Enregistrer l'image** l'y met
+  (l'appli l'explique la première fois). Sur Android, la photo va directement dans la galerie
+  (album « SOHRI »).
 - Les mises à jour arrivent toutes seules : quand une nouvelle version est en ligne, un bandeau
   « Mettre à jour » s'affiche dans l'appli (il faut Internet à ce moment-là).
 - Supprimer l'icône de l'écran d'accueil efface les données de l'appli : faire une sauvegarde avant.
@@ -328,7 +333,7 @@ L'appli Android ajoute ce qu'une WebView ne fait pas seule :
 |--------------------------------------------|---------------------------------------------------------------------------|
 | sélecteur de photos, sélecteur de fichiers | `<input type="file">`                                                     |
 | ouverture de liens (Maps, site, téléphone) | `openExternal(url)`                                                       |
-| ouvrir / partager / « enregistrer sous »   | `fileBegin(nom, type)`, `fileAppend(id, base64)`, `fileFinish(id, action)` |
+| ouvrir / partager / « enregistrer sous » / photo dans la galerie (album SOHRI) | `fileBegin(nom, type)`, `fileAppend(id, base64)`, `fileFinish(id, action)` (action : `open`, `share`, `save`, `gallery`) |
 | presse-papiers                             | `copyText(texte)`                                                         |
 | envoi d'un texte (invitation au partage)   | `shareText(texte)`                                                        |
 | thème choisi et thème du téléphone         | `getThemePreference()`, `setThemePreference()`, `isSystemDark()` ; `onSystemThemeChanged(sombre)` |

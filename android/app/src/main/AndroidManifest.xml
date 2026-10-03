@@ -5,6 +5,12 @@
          contacte aucun serveur. Autorisation accordée d'office, sans question à l'installation. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Télécharger une photo dans la galerie : nécessaire seulement sur Android 8 et 9 (demandée au
+         premier téléchargement) ; les versions suivantes n'en ont pas besoin. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

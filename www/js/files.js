@@ -195,7 +195,9 @@ function isViewableImage(att) {
 function openAttachment(att, list) {
   if (isViewableImage(att)) {
     var images = list.filter(isViewableImage);
-    openViewer(images.map(function (a) { return a.blob; }), images.indexOf(att));
+    openViewer(images.map(function (a) { return a.blob; }), images.indexOf(att), imageFileActions(function (i) {
+      return { blob: images[i].blob, name: images[i].name };
+    }));
   } else {
     openDocument(att);
   }
@@ -274,7 +276,7 @@ function sendToAndroid(blob, name, action, onProgress) {
    l'enregistrer (« Enregistrer dans Fichiers »), de l'ouvrir dans une autre appli ou de l'envoyer.
    Sur un ordinateur : ouverture dans un onglet, ou téléchargement. */
 var TOUCH_DEVICE = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-var SHARE_LABELS = { open: 'Ouvrir', share: 'Partager', save: 'Enregistrer' };
+var SHARE_LABELS = { open: 'Ouvrir', share: 'Partager', save: 'Enregistrer', gallery: 'Enregistrer' };
 
 function shareableFile(blob, name) {
   if (!navigator.share || !navigator.canShare || typeof File !== 'function') return null;
@@ -299,17 +301,24 @@ function shareWithSheet(file, action) {
 function browserHandOver(blob, name, action) {
   var file = TOUCH_DEVICE || action === 'share' ? shareableFile(blob, name) : null;
   if (file) return shareWithSheet(file, action);
-  var url = URL.createObjectURL(blob);
   if (action === 'open') {
+    var url = URL.createObjectURL(blob);
     window.open(url, '_blank');
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   } else {
-    var link = h('a', { href: url, download: safeFileName(name) });
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    downloadFile(blob, name);
   }
-  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   return Promise.resolve();
+}
+
+/* Téléchargement classique (dossier Téléchargements). */
+function downloadFile(blob, name) {
+  var url = URL.createObjectURL(blob);
+  var link = h('a', { href: url, download: safeFileName(name) });
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
 }
 
 /* action : 'open' (ouvrir), 'share' (partager) ou 'save' (enregistrer sous). */
@@ -339,4 +348,60 @@ function shareFile(blob, name) {
 
 function saveFile(blob, name, onProgress) {
   return handOverFile(blob, name, 'save', onProgress);
+}
+
+/* ---------- Télécharger une photo dans la galerie du téléphone ----------
+   Appli Android : copiée directement dans la galerie (album « SOHRI »). iPhone : une appli web ne
+   peut pas écrire dans Photos ; la feuille de partage s'ouvre, et « Enregistrer l'image » l'y met
+   (expliqué la première fois). Ailleurs (ordinateur...) : fichier téléchargé. */
+var GALLERY_HINT_PREF = 'galleryHintSeen';
+var DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11.5"/><path d="M7 10.5l5 5 5-5"/><path d="M5 20h14"/></svg>';
+
+function saveToGallery(blob, name) {
+  var failed = function (err) {
+    console.error(err);
+    uiAlert("La photo n'a pas pu être enregistrée.");
+  };
+  if (window.AndroidBridge) return handOverFile(blob, name, 'gallery').then(null, failed);
+  var file = IS_IOS ? shareableFile(blob, name) : null;
+  if (file) {
+    var share = function () { return shareWithSheet(file, 'gallery'); };
+    if (readPref(GALLERY_HINT_PREF)) return share().then(null, failed);
+    writePref(GALLERY_HINT_PREF, true);
+    return showDialog("Dans le menu qui s'ouvre, touche « Enregistrer l'image » : la photo ira dans l'app Photos.", {
+      title: 'Télécharger la photo', cancelable: true, okLabel: 'Continuer', onConfirm: share
+    }).then(null, failed);
+  }
+  downloadFile(blob, name);
+  showToast('Photo téléchargée');
+  return Promise.resolve();
+}
+
+/* Boutons « Télécharger » et « Partager » de la visionneuse de photos. file(index) : { blob, name },
+   sa promesse (photo à télécharger d'abord), ou null s'il n'y a rien à faire. Avec la photo déjà là,
+   l'action part tout de suite : sur iPhone, la feuille de partage ne s'ouvre qu'en réponse directe
+   à un toucher. */
+function imageFileActions(file) {
+  var withFile = function (index, use) {
+    var found = file(index);
+    if (found && typeof found.then === 'function') found.then(function (f) { if (f) use(f); });
+    else if (found) use(found);
+  };
+  return [
+    { svg: DOWNLOAD_ICON, label: 'Télécharger', onClick: function (i) { withFile(i, function (f) { saveToGallery(f.blob, f.name); }); } },
+    { icon: '↗', label: 'Partager', onClick: function (i) { withFile(i, function (f) { shareFile(f.blob, f.name); }); } }
+  ];
+}
+
+/* Photo d'une note (Blob, ou texte « data: » pour de très anciennes notes) : { blob, name }, ou sa
+   promesse. */
+function imageFile(image, baseName) {
+  var named = function (blob) { return { blob: blob, name: baseName + '.' + extensionFor(blob.type) }; };
+  if (image instanceof Blob) return named(image);
+  return fetch(image).then(function (response) { return response.blob(); }).then(named);
+}
+
+function extensionFor(type) {
+  return Object.keys(MIME_BY_EXTENSION).filter(function (ext) { return MIME_BY_EXTENSION[ext] === type; })[0] || 'jpg';
 }

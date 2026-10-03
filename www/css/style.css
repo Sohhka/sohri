@@ -750,6 +750,7 @@ h2.section-title { font-size: 0.78rem; }
   width: 44px; height: 44px; padding: 0; border: none; border-radius: 100px;
   background: rgba(255,255,255,0.16); color: #fff; font-size: 1.3rem; line-height: 1;
 }
+.viewer-btn svg { display: block; margin: auto; }
 .viewer-counter { flex: 1; text-align: center; color: #fff; font-size: 0.9rem; font-weight: 600; pointer-events: none; }
 .viewer-actions { display: flex; gap: 8px; }
 /* Description et commentaires, en bas de la photo */

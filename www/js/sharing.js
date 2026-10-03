@@ -514,6 +514,23 @@ function renderSharedStrip(people, group) {
   updateUnreadIndicators();
 }
 
+/* Photo d'un proche en taille réelle, à télécharger ou partager : { blob, name } ; pas encore reçue,
+   la promesse de la recevoir d'abord ; null sans connexion (rien que la miniature). */
+function sharedPhotoFile(photo) {
+  var name = photoFileName(photo);
+  var missing = function () {
+    showToast('Photo pas encore reçue en taille réelle');
+    return null;
+  };
+  if (photo.blob) return { blob: photo.blob, name: name };
+  if (!isSignedIn()) return missing();
+  showToast('Réception de la photo…');
+  return downloadSharedPhoto(photo).then(function (blob) {
+    photo.blob = blob;
+    return { blob: blob, name: name };
+  }, missing);
+}
+
 /* « 12 photos, dont 3 encore à recevoir » : ce qui est déjà consultable hors connexion. */
 function sharedInfoText(photos) {
   var missing = photos.filter(function (p) { return !p.blob; }).length;
@@ -568,12 +585,11 @@ byId('sharedPhotoGrid').addEventListener('click', function (e) {
   if (!cell) return;
   var photos = sharedAlbumPhotos.slice();
   var index = parseInt(cell.dataset.index, 10);
-  openViewer(photos.map(function (p) { return p.blob || p.thumb; }), index, [
-    { icon: '↗', label: 'Partager', onClick: function (i) {
-      if (photos[i].blob) shareFile(photos[i].blob, photoFileName(photos[i]));
-      else showToast('Photo pas encore reçue en taille réelle');
-    } }
-  ], {
+  openViewer(photos.map(function (p) { return p.blob || p.thumb; }), index, imageFileActions(function (i) {
+    var file = sharedPhotoFile(photos[i]);
+    if (file && file.then) file.then(function (f) { if (f) viewerReplace(i, f.blob); }); // reçue : affichée en grand
+    return file;
+  }), {
     info: function (i) {
       var stats = sharedAlbumStats[photos[i].key];
       return { caption: photos[i].caption || '', location: photos[i].location || '', label: commentLabel(stats, true, false), unread: stats && stats.unread > 0 };

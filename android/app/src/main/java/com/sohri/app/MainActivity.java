@@ -1,17 +1,24 @@
 package com.sohri.app;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.view.View;
 import android.webkit.JavascriptInterface;
@@ -59,8 +66,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Affiche l'appli web (dossier www/, embarqué dans l'APK) dans une WebView plein écran et lui
  * fournit ce qu'une WebView ne gère pas seule : choix de photos et de fichiers, ouverture des liens
- * dans l'appli adaptée (Google Maps...), ouverture/partage/enregistrement de fichiers, vidéo en
- * plein écran, bouton retour, presse-papiers, marges des barres système et thème clair/sombre.
+ * dans l'appli adaptée (Google Maps...), ouverture/partage/enregistrement de fichiers, photos
+ * téléchargées dans la galerie, vidéo en plein écran, bouton retour, presse-papiers, marges des
+ * barres système et thème clair/sombre.
  */
 public class MainActivity extends ComponentActivity {
 
@@ -72,6 +80,8 @@ public class MainActivity extends ComponentActivity {
     private static final String PREF_THEME = "theme";
     // Fichiers reçus de la page pour être ouverts, partagés ou enregistrés (voir res/xml/file_paths.xml).
     private static final String EXPORT_DIR = "exports";
+    // Album de la galerie où arrivent les photos téléchargées (Pictures/SOHRI).
+    private static final String GALLERY_ALBUM = "SOHRI";
 
     private FrameLayout root;
     private WebView webView;
@@ -80,6 +90,7 @@ public class MainActivity extends ComponentActivity {
     private SharedPreferences prefs;
     private final Map<String, Transfer> transfers = new ConcurrentHashMap<>();
     private Transfer pendingSave;
+    private Transfer pendingGallery; // en attente de l'autorisation d'écrire (Android 8 et 9)
     private View fullscreenView; // vidéo en plein écran
     private WebChromeClient.CustomViewCallback fullscreenCallback;
 
@@ -100,6 +111,9 @@ public class MainActivity extends ComponentActivity {
     private final ActivityResultLauncher<Intent> saveDocument =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
                     this::onSaveLocationChosen);
+    private final ActivityResultLauncher<String> storagePermission =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(),
+                    this::onStoragePermission);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -287,6 +301,10 @@ public class MainActivity extends ComponentActivity {
 
     private void handOver(Transfer transfer, String action) {
         String type = mimeTypeOf(transfer);
+        if ("gallery".equals(action)) {
+            saveToGallery(transfer);
+            return;
+        }
         try {
             if ("save".equals(action)) {
                 pendingSave = transfer;
@@ -337,9 +355,93 @@ public class MainActivity extends ComponentActivity {
             int read;
             while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
             return true;
-        } catch (IOException | SecurityException e) {
+        } catch (IOException | RuntimeException e) { // emplacement refusé, stockage plein...
             return false;
         }
+    }
+
+    /* ---------- « Télécharger » : photo copiée dans la galerie du téléphone (album SOHRI) ---------- */
+
+    /** À partir d'Android 10, aucune autorisation n'est nécessaire ; Android 8 et 9 la demandent une
+     *  fois (écrire dans les fichiers du téléphone). */
+    private void saveToGallery(Transfer transfer) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && ContextCompat.checkSelfPermission(this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            pendingGallery = transfer;
+            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            return;
+        }
+        String type = mimeTypeOf(transfer);
+        new Thread(() -> {
+            boolean saved;
+            try {
+                saved = copyToGallery(transfer.file, type);
+            } catch (RuntimeException e) { // galerie indisponible : un message, pas un plantage
+                saved = false;
+            }
+            boolean done = saved;
+            runOnUiThread(() -> Toast.makeText(this,
+                    done ? R.string.gallery_saved : R.string.gallery_save_failed, Toast.LENGTH_SHORT).show());
+        }).start();
+    }
+
+    private void onStoragePermission(boolean granted) {
+        Transfer transfer = pendingGallery;
+        pendingGallery = null;
+        if (transfer == null) return;
+        if (granted) saveToGallery(transfer);
+        else Toast.makeText(this, R.string.gallery_permission_denied, Toast.LENGTH_LONG).show();
+    }
+
+    @SuppressWarnings("deprecation") // dossier public : seulement avant Android 10
+    private boolean copyToGallery(File source, String type) {
+        boolean video = type.startsWith("video/");
+        String folder = video ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContentResolver resolver = getContentResolver();
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, source.getName());
+            values.put(MediaStore.MediaColumns.MIME_TYPE, type);
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, folder + "/" + GALLERY_ALBUM);
+            values.put(MediaStore.MediaColumns.IS_PENDING, 1); // invisible tant qu'elle n'est pas complète
+            Uri collection = video
+                    ? MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                    : MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+            Uri item;
+            try {
+                item = resolver.insert(collection, values);
+            } catch (RuntimeException e) { // type de fichier refusé par la galerie
+                return false;
+            }
+            if (item == null) return false;
+            if (!copyToUri(source, item)) {
+                resolver.delete(item, null, null);
+                return false;
+            }
+            values.clear();
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0); // complète : visible dans la galerie
+            return resolver.update(item, values, null, null) > 0;
+        }
+        File dir = new File(Environment.getExternalStoragePublicDirectory(folder), GALLERY_ALBUM);
+        if (!dir.isDirectory() && !dir.mkdirs()) return false;
+        File target = uniqueFile(dir, source.getName());
+        if (!copyToUri(source, Uri.fromFile(target))) {
+            target.delete();
+            return false;
+        }
+        // La galerie ne voit le fichier qu'une fois signalé.
+        MediaScannerConnection.scanFile(this, new String[]{target.getAbsolutePath()}, new String[]{type}, null);
+        return true;
+    }
+
+    /** « photo.jpg », sinon « photo (2).jpg », « photo (3).jpg »... */
+    private static File uniqueFile(File dir, String name) {
+        int dot = name.lastIndexOf('.');
+        String base = dot > 0 ? name.substring(0, dot) : name;
+        String extension = dot > 0 ? name.substring(dot) : "";
+        File file = new File(dir, name);
+        for (int n = 2; file.exists(); n++) file = new File(dir, base + " (" + n + ")" + extension);
+        return file;
     }
 
     private static String mimeTypeOf(Transfer transfer) {
@@ -568,7 +670,7 @@ public class MainActivity extends ComponentActivity {
         }
 
         /* Fichier envoyé par la page : fileBegin, puis fileAppend pour chaque morceau, puis fileFinish
-           avec l'action voulue ("open", "share" ou "save"). */
+           avec l'action voulue ("open", "share", "save", ou "gallery" pour une photo à télécharger). */
         @JavascriptInterface
         public String fileBegin(String name, String mimeType) throws IOException {
             File dir = new File(new File(getCacheDir(), EXPORT_DIR), UUID.randomUUID().toString());

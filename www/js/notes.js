@@ -184,9 +184,12 @@ function renderNoteView(params) {
     }
     var images = note.images || [];
     if (images.length) {
+      var actions = imageFileActions(function (i) {
+        return imageFile(images[i], safeFileName(note.title, 'Note') + '-' + (i + 1));
+      });
       detail.appendChild(h('p', { className: 'section-title', text: 'Photos' }));
       detail.appendChild(h('div', { className: 'image-grid' }, images.map(function (image, index) {
-        return h('button', { type: 'button', className: 'image-cell', onclick: function () { openViewer(images, index); } }, [
+        return h('button', { type: 'button', className: 'image-cell', onclick: function () { openViewer(images, index, actions); } }, [
           h('img', { src: blobUrl('note-view', image), alt: 'Photo ' + (index + 1) })
         ]);
       })));

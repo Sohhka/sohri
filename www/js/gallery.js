@@ -192,8 +192,9 @@ function openAlbumViewer(index) {
       });
     }
   };
-  openViewer(photos.map(function (p) { return p.blob; }), index, [
-    { icon: '↗', label: 'Partager', onClick: function (i) { shareFile(photos[i].blob, photoFileName(photos[i])); } },
+  openViewer(photos.map(function (p) { return p.blob; }), index, imageFileActions(function (i) {
+    return { blob: photos[i].blob, name: photoFileName(photos[i]) };
+  }).concat([
     {
       icon: '🗑', label: 'Supprimer',
       onClick: function (i) {
@@ -210,7 +211,7 @@ function openAlbumViewer(index) {
         });
       }
     }
-  ], details);
+  ]), details);
 }
 
 /* Ajout de photos : une à une (réduction, miniature, date), avec une barre de progression.

@@ -97,7 +97,10 @@ function renderPhotoDetail(params) {
       return reloadDetailImage(detail, attempt);
     });
     img.addEventListener('click', function () {
-      openViewer([detail.image], 0, null, { info: function () { return null; }, open: function () {}, reload: function (i, attempt) { return reloadDetailImage(detail, attempt); } });
+      var actions = imageFileActions(function () {
+        return detail.own ? { blob: detail.photo.blob, name: photoFileName(detail.photo) } : sharedPhotoFile(detail.photo);
+      });
+      openViewer([detail.image], 0, actions, { info: function () { return null; }, open: function () {}, reload: function (i, attempt) { return reloadDetailImage(detail, attempt); } });
     });
     box.appendChild(img);
     box.appendChild(h('div', { className: 'card caption-card', id: 'photoCaption' }));

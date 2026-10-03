@@ -143,7 +143,7 @@ async function select(page, sel, start, end) { await page.$eval(sel, (el, [s, e]
     await page.waitForFunction(() => document.getElementById('rateText').textContent !== '');
     check(norm(await page.textContent('#rateText')) === '1 € = 175,00 ¥', 'migration v1 → v2 : taux conservé');
     const stores = await page.evaluate(async () => { const db = await dbPromise; return { version: db.version, stores: Array.from(db.objectStoreNames).sort().join(',') }; });
-    check(stores.version === 6 && stores.stores === 'addresses,cloud,documentFiles,documents,expenses,folders,notes,photos,settings,sharedAlbums,sharedComments,sharedPhotos', 'migration : base en version 6 avec les nouveaux magasins (' + stores.stores + ')');
+    check(stores.version === 7 && stores.stores === 'addresses,cloud,documentFiles,documents,expenses,folders,notes,photos,schedule,settings,sharedAlbums,sharedComments,sharedFiles,sharedItems,sharedPhotos', 'migration : base en version 7 avec les nouveaux magasins (' + stores.stores + ')');
     await page.evaluate(() => goToSection('notes'));
     await page.waitForSelector('#notesContent .list-row');
     check(await page.textContent('#notesContent .list-row-title') === 'Ancienne note', 'migration : ancienne note visible');
@@ -173,7 +173,7 @@ async function select(page, sel, start, end) { await page.$eval(sel, (el, [s, e]
   // ---------- Menu ----------
   await page.click('#navBtn');
   check(await visible(page, '#drawer'), 'menu ouvert');
-  check((await page.$$eval('.drawer-item', l => l.filter(e => !e.hidden).map(e => e.textContent.trim()))).join(' | ') === '💴Convertisseur ¥ ⇄ € | 🧾Dépenses | 🌤️Météo & heure | 📝Notes | 📍Carnet d\'adresses | 🗣️Phrases utiles | 🖼️Images | 📂Documents | 👥Partage | ⚙️Paramètres', 'menu : 10 rubriques dont Dépenses, Phrases utiles, Météo & heure et Partage (projet Firebase configuré)');
+  check((await page.$$eval('.drawer-item', l => l.filter(e => !e.hidden).map(e => e.textContent.trim()))).join(' | ') === '💴Convertisseur ¥ ⇄ € | 📅Programme | 🧾Dépenses | 🌤️Météo & heure | 📝Notes | 📍Carnet d\'adresses | 🗣️Phrases utiles | 🖼️Images | 📂Documents | 👥Partage | ⚙️Paramètres', 'menu : 11 rubriques dont Programme, Dépenses, Phrases utiles, Météo & heure et Partage (projet Firebase configuré)');
   await page.screenshot({ path: OUT + '/01-menu.png' });
   await page.click('.drawer-item[data-section="notes"]');
   await page.waitForSelector('#notesEmpty:not([hidden])');
@@ -601,7 +601,7 @@ async function select(page, sel, start, end) { await page.$eval(sel, (el, [s, e]
   await page.setInputFiles('#restoreInput', { name: 'SOHRI-sauvegarde.zip', mimeType: 'application/zip', buffer: fs.readFileSync(zipPath) });
   await page.waitForSelector('#dialog:not([hidden])');
   const restoreMsg = norm(await page.textContent('#dialogMessage'));
-  check(restoreMsg.includes('(2 notes, 2 adresses, 2 albums, 2 photos, 0 document, 0 dépense)'), 'restauration : résumé du contenu (' + restoreMsg.slice(0, 100) + '…)');
+  check(restoreMsg.includes('(2 notes, 2 adresses, 2 albums, 2 photos, 0 document, 0 dépense, 0 étape au programme)'),'restauration : résumé du contenu (' + restoreMsg.slice(0, 100) + '…)');
   await Promise.all([page.waitForNavigation(), page.click('#dialogOkBtn')]);
   await page.waitForFunction(() => document.getElementById('rateText').textContent !== '');
   const after = await page.evaluate(async () => ({ notes: (await dbGetAll('notes')).length, addresses: (await dbGetAll('addresses')).length, folders: (await dbGetAll('folders')).length, photos: (await dbGetAll('photos')).length }));

@@ -347,7 +347,8 @@ function backupSummary(data) {
     plural(albums, 'album', 'albums'),
     plural((data.photos || []).length, 'photo', 'photos'),
     plural((data.documents || []).length, 'document', 'documents'),
-    plural((data.expenses || []).length, 'dépense', 'dépenses')
+    plural((data.expenses || []).length, 'dépense', 'dépenses'),
+    plural((data.schedule || []).length, 'étape au programme', 'étapes au programme')
   ].join(', ');
 }
 

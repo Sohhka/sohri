@@ -116,6 +116,7 @@ function renderCategoryFilters(addresses) {
 function renderAddressList() {
   var renderId = ++addressesRenderId;
   var query = normalizeText(byId('addressSearch').value.trim());
+  renderSharedEntries('addresses', byId('addressShared'), !query); // carnets de mes proches (shared-items.js)
   return dbGetAll('addresses').then(function (addresses) {
     if (renderId !== addressesRenderId) return;
     renderCategoryFilters(addresses);
@@ -161,7 +162,7 @@ function actionButton(icon, label, onClick) {
 }
 
 function renderAddressView(params) {
-  return Promise.all([dbGet('addresses', params.id), dbGetAll('notes'), dbGetAll('folders')]).then(function (results) {
+  return Promise.all([dbGet('addresses', params.id), dbGetAll('notes'), dbGetAll('folders'), dbGetAll('schedule')]).then(function (results) {
     var address = results[0];
     var detail = byId('addressDetail');
     detail.innerHTML = '';
@@ -222,6 +223,7 @@ function renderAddressView(params) {
       detail.appendChild(h('p', { className: 'section-title', text: 'Pièces jointes' }));
       detail.appendChild(renderAttachmentList(address.attachments));
     }
+    (scheduleRowsForAddress(address, results[3]) || []).forEach(function (row) { detail.appendChild(row); });
     var linked = sortNotes(results[1].filter(function (n) { return String(n.addressId) === String(address.id); }));
     if (linked.length) {
       var folderMap = mapById(results[2].filter(isNoteFolder));
@@ -235,23 +237,26 @@ function showAddressMenu() {
   var address = viewedAddress;
   if (!address) return;
   showActions([
+    { icon: '📅', label: 'Ajouter au programme', onClick: function () { openView('schedule-edit', { addressId: address.id }); } },
     { icon: '📝', label: 'Nouvelle note sur ce lieu', onClick: function () { openView('note-edit', { addressId: address.id }); } },
     { icon: '🗑️', label: "Supprimer l'adresse", danger: true, onClick: function () { deleteAddress(address); } }
   ], address.title);
 }
 
-/* Supprime l'adresse et la retire des notes qui y étaient liées. */
+/* Supprime l'adresse et la retire des notes et des étapes du programme qui y étaient liées. */
 function deleteAddress(address) {
   uiConfirm('Supprimer « ' + address.title + ' » du carnet ?', 'Supprimer', true).then(function (ok) {
     if (!ok) return;
-    return dbChangedRecords('notes', function (note) {
-      if (String(note.addressId) !== String(address.id)) return false;
-      note.addressId = null;
+    var unlink = function (record) {
+      if (String(record.addressId) !== String(address.id)) return false;
+      record.addressId = null;
       return true;
-    }).then(function (notes) {
-      return dbWrite(['addresses', 'notes'], function (tx) {
+    };
+    return Promise.all([dbChangedRecords('notes', unlink), dbChangedRecords('schedule', unlink)]).then(function (r) {
+      return dbWrite(['addresses', 'notes', 'schedule'], function (tx) {
         tx.objectStore('addresses')['delete'](address.id);
-        notes.forEach(function (note) { tx.objectStore('notes').put(note); });
+        r[0].forEach(function (note) { tx.objectStore('notes').put(note); });
+        r[1].forEach(function (event) { tx.objectStore('schedule').put(event); });
       });
     }).then(function () {
       leaveAfterDelete('addresses');

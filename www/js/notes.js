@@ -79,6 +79,7 @@ function renderNotes(params) {
   var folderId = params.folderId || null;
   var query = normalizeText(byId('notesSearch').value.trim());
   byId('notesSearch').placeholder = folderId ? 'Rechercher dans ce dossier' : 'Rechercher dans les notes';
+  renderSharedEntries('notes', byId('notesShared'), !folderId && !query); // notes de mes proches (shared-items.js)
   return Promise.all([dbGetAll('notes'), dbGetAll('folders'), dbGetAll('addresses')]).then(function (results) {
     if (renderId !== notesRenderId) return;
     var notes = results[0];

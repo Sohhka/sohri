@@ -1,7 +1,8 @@
 /* ---------- Toutes mes rubriques, les mêmes sur tous mes appareils (facultatif) ----------
    Réglage du compte « syncAll » (Partage → Mes appareils), valable pour tous ses appareils. Avec
    Internet, chacun envoie ses changements et reçoit ceux des autres : notes, carnet d'adresses,
-   documents, leurs dossiers, et dépenses (les Images ont leur propre synchronisation : cloud.js).
+   documents, leurs dossiers, dépenses et programme (les Images ont leur propre synchronisation :
+   cloud.js).
    En ligne, visible de son seul propriétaire (firestore.rules) :
    - users/{moi}/items/{id} : un élément, décrit en JSON (data), avec les empreintes de ses fichiers
      (blobs). Son identifiant, tiré de sa date de création, est le même sur tous les appareils ;
@@ -18,14 +19,15 @@
    « igc » (dernier ménage des fichiers en ligne). Les éléments venus d'un autre appareil
    sont marqués « fromAccount » : ils quittent le téléphone à la déconnexion (ils restent sur le
    compte et reviennent à la connexion suivante). */
-var ITEM_STORES = { folder: 'folders', address: 'addresses', note: 'notes', document: 'documents', expense: 'expenses' };
-var ITEM_ORDER = { folder: 0, address: 1, note: 2, document: 3, expense: 4 }; // dossiers et adresses d'abord : les notes y renvoient
-var ITEM_PREFIX = { folder: 'f', address: 'l', note: 'n', document: 'd', expense: 'e' };
+var ITEM_STORES = { folder: 'folders', address: 'addresses', note: 'notes', document: 'documents', expense: 'expenses', event: 'schedule' };
+var ITEM_ORDER = { folder: 0, address: 1, note: 2, document: 3, expense: 4, event: 5 }; // dossiers et adresses d'abord : notes et étapes y renvoient
+var ITEM_PREFIX = { folder: 'f', address: 'l', note: 'n', document: 'd', expense: 'e', event: 'v' };
+var ITEM_WITH_ADDRESS = { note: true, event: true }; // éléments liés à une adresse du carnet
 var ITEM_FOLDER_KINDS = ['notes', 'documents']; // les albums (« photos ») sont ceux des Images
 // Champs propres à ce téléphone (identifiants, marques de synchronisation), ou transmis à part.
 var ITEM_OWN_FIELDS = {
   id: 1, rid: 1, fromAccount: 1, folderId: 1, addressId: 1, fileId: 1,
-  images: 1, attachments: 1, thumb: 1, folder: 1, address: 1, file: 1
+  images: 1, attachments: 1, thumb: 1, folder: 1, address: 1, file: 1, place: 1
 };
 var ITEM_FILE_MAX = 60 * 1024 * 1024;  // fichier le plus gros synchronisé (voir firestore.rules)
 var BLOB_PART_SIZE = 900 * 1024;       // un document Firestore ne dépasse pas 1 Mo
@@ -100,15 +102,23 @@ function uniqueList(list) {
    Ses champs (sauf ceux propres à ce téléphone), ses liens (dossier, adresse) par identifiant
    commun, et ses fichiers remplacés par ref(fichier), toujours dans le même ordre : photos, pièces
    jointes, miniature, contenu. file : contenu d'un document (magasin documentFiles). */
+/* Champ propre à ce téléphone, ou transmis à part ? Pour une adresse du carnet, « address » est son
+   adresse postale, et part avec elle (ailleurs, c'est le lien vers une adresse ; avant la 2.4, elle
+   ne partait pas : les adresses déjà en ligne repartent une fois avec elle). */
+function isOwnField(kind, key) {
+  return !!ITEM_OWN_FIELDS[key] && !(kind === 'address' && key === 'address');
+}
+
 function itemData(kind, record, ctx, ref, file) {
   var data = {};
   Object.keys(record).forEach(function (key) {
     var value = record[key];
-    if (ITEM_OWN_FIELDS[key] || value === undefined || value instanceof Blob) return;
+    if (isOwnField(kind, key) || value === undefined || value instanceof Blob) return;
     data[key] = value;
   });
   if (kind === 'note' || kind === 'document') data.folder = record.folderId != null ? ctx.folderRid[record.folderId] || null : null;
-  if (kind === 'note') data.address = record.addressId != null ? ctx.addressRid[record.addressId] || null : null;
+  if (ITEM_WITH_ADDRESS[kind]) data.address = record.addressId != null ? ctx.addressRid[record.addressId] || null : null;
+  if (kind === 'event') data.place = placeSnapshot(record.addressId != null ? ctx.addressRecord[record.addressId] : null);
   // Photos d'une note : très anciennes notes, parfois en texte (data URL), gardé tel quel.
   if (record.images) data.images = record.images.map(function (image) { return image instanceof Blob ? ref(image) : image; });
   if (record.attachments) {
@@ -124,6 +134,16 @@ function itemData(kind, record, ctx, ref, file) {
     data.file = file ? ref(file) : null;
   }
   return data;
+}
+
+/* Lieu d'une étape du programme, recopié dans sa description : un proche à qui je partage le
+   programme (sans mon carnet d'adresses) le voit avec son adresse, pour l'itinéraire et le taxi.
+   Lieu modifié dans le carnet : l'étape change aussi, et repart. */
+function placeSnapshot(address) {
+  if (!address) return null;
+  var place = { title: address.title || '' };
+  ['address', 'addressJa', 'phone', 'category'].forEach(function (key) { if (address[key]) place[key] = address[key]; });
+  return place;
 }
 
 /* Pour l'empreinte d'un élément : un fichier y figure par sa taille et son type (sans le relire). */
@@ -161,11 +181,11 @@ function itemRefs(kind, data) {
 function recordFromData(kind, data, ctx, blobs, existing) {
   var record = {};
   Object.keys(data).forEach(function (key) {
-    if (!ITEM_OWN_FIELDS[key]) record[key] = data[key];
+    if (!isOwnField(kind, key)) record[key] = data[key];
   });
   var blobOf = function (value) { return isBlobRef(value) ? blobs[value.$blob] : value; };
   if (kind === 'note' || kind === 'document') record.folderId = data.folder && ctx.folderId[data.folder] !== undefined ? ctx.folderId[data.folder] : null;
-  if (kind === 'note') record.addressId = data.address && ctx.addressId[data.address] !== undefined ? ctx.addressId[data.address] : null;
+  if (ITEM_WITH_ADDRESS[kind]) record.addressId = data.address && ctx.addressId[data.address] !== undefined ? ctx.addressId[data.address] : null;
   if (Array.isArray(data.images)) record.images = data.images.map(blobOf);
   if (Array.isArray(data.attachments)) {
     record.attachments = data.attachments.map(function (a) {
@@ -187,13 +207,17 @@ function recordFromData(kind, data, ctx, blobs, existing) {
 function rememberItem(ctx, item) {
   ctx.byRid[item.rid] = item;
   if (item.kind === 'folder') { ctx.folderRid[item.record.id] = item.rid; ctx.folderId[item.rid] = item.record.id; }
-  if (item.kind === 'address') { ctx.addressRid[item.record.id] = item.rid; ctx.addressId[item.rid] = item.record.id; }
+  if (item.kind === 'address') {
+    ctx.addressRid[item.record.id] = item.rid;
+    ctx.addressId[item.rid] = item.record.id;
+    ctx.addressRecord[item.record.id] = item.record;
+  }
 }
 
 /* Tous les éléments d'ici, par identifiant commun, avec la correspondance des dossiers et adresses. */
 function loadLocalItems() {
-  return Promise.all([dbGetAll('folders'), dbGetAll('addresses'), dbGetAll('notes'), dbGetAll('documents'), dbGetAll('expenses')]).then(function (r) {
-    var ctx = { byRid: {}, folderRid: {}, folderId: {}, addressRid: {}, addressId: {} };
+  return Promise.all([dbGetAll('folders'), dbGetAll('addresses'), dbGetAll('notes'), dbGetAll('documents'), dbGetAll('expenses'), dbGetAll('schedule')]).then(function (r) {
+    var ctx = { byRid: {}, folderRid: {}, folderId: {}, addressRid: {}, addressId: {}, addressRecord: {} };
     var add = function (kind) {
       return function (record) {
         var rid = itemRemoteId(kind, record);
@@ -206,6 +230,7 @@ function loadLocalItems() {
     r[2].forEach(add('note'));
     r[3].forEach(add('document'));
     r[4].forEach(add('expense'));
+    r[5].forEach(add('event'));
     return ctx;
   });
 }
@@ -748,9 +773,10 @@ function uploadItemBlob(hash, blob) {
   });
 }
 
-/* Un fichier en ligne, réassemblé et vérifié (son empreinte). */
-function downloadItemBlob(ref) {
-  var me = userPath();
+/* Un fichier en ligne, réassemblé et vérifié (son empreinte) : le mien, ou celui d'un proche qui me
+   partage l'élément (owner). */
+function downloadItemBlob(ref, owner) {
+  var me = owner ? userPath(owner) : userPath();
   var base = cloudUrls().root + '/' + me + '/blobParts/' + ref.$blob + '-';
   return fsGet(me + '/blobs/' + ref.$blob).then(function (meta) {
     if (!meta) throw cloudError('not-found', 'Fichier pas encore en ligne');
@@ -860,8 +886,9 @@ function cloudSetSyncAll(enabled) {
     });
   }
   // Plus rien ne part pendant l'arrêt (voir syncAllEnabled) ; la synchronisation en cours finit d'abord.
+  // Mes proches ne voient plus mes rubriques partagées (elles ne sont plus en ligne), sauf les Images.
   syncAllStopping = true;
-  return (cloudSyncRunning || Promise.resolve()).then(null, function () {}).then(setProfile).then(deleteOnlineItems).then(function () {
+  return (cloudSyncRunning || Promise.resolve()).then(null, function () {}).then(removeItemShares).then(setProfile).then(deleteOnlineItems).then(function () {
     return sharedWith('albums').length ? null : unpublishAlbums();
   }).then(leaveItemSync).then(function () {
     syncAllStopping = false;
@@ -900,7 +927,7 @@ function leaveItemSync() {
 }
 
 function adoptAccountItems() {
-  var stores = ['folders', 'addresses', 'notes', 'documents', 'expenses'];
+  var stores = ['folders', 'addresses', 'notes', 'documents', 'expenses', 'schedule'];
   return Promise.all(stores.map(function (store) { return dbGetAll(store); })).then(function (lists) {
     var changed = [];
     lists.forEach(function (records, i) {
@@ -936,13 +963,13 @@ function forgetAccountItems(uid) {
     items.forEach(function (item) {
       if (leaving[item.rid]) return;
       if (item.kind !== 'folder' && item.record.folderId != null) delete leaving[ctx.folderRid[item.record.folderId]];
-      if (item.kind === 'note' && item.record.addressId != null) delete leaving[ctx.addressRid[item.record.addressId]];
+      if (ITEM_WITH_ADDRESS[item.kind] && item.record.addressId != null) delete leaving[ctx.addressRid[item.record.addressId]];
     });
     var remove = items.filter(function (item) { return leaving[item.rid]; });
     var adopt = items.filter(function (item) { return item.record.fromAccount === uid && !leaving[item.rid]; });
     if (!remove.length && !adopt.length) return null;
     return Promise.all(adopt.map(function (item) { return detachBlobs(item.record); })).then(function () {
-      return dbWrite(['folders', 'addresses', 'notes', 'documents', 'documentFiles', 'expenses'], function (tx) {
+      return dbWrite(['folders', 'addresses', 'notes', 'documents', 'documentFiles', 'expenses', 'schedule'], function (tx) {
         remove.forEach(function (item) {
           tx.objectStore(ITEM_STORES[item.kind])['delete'](item.record.id);
           if (item.kind === 'document' && item.record.fileId != null) tx.objectStore('documentFiles')['delete'](item.record.fileId);
@@ -959,5 +986,5 @@ function forgetAccountItems(uid) {
 // Changements reçus de mes autres appareils : listes et fiches réaffichées (pas les formulaires).
 onCloudChange(function (what) {
   if (what !== 'items') return;
-  if (['notes', 'note', 'addresses', 'address', 'documents', 'expenses'].indexOf(currentViewName()) >= 0) refreshView();
+  if (['notes', 'note', 'addresses', 'address', 'documents', 'expenses', 'schedule', 'schedule-day'].indexOf(currentViewName()) >= 0) refreshView();
 });

@@ -367,6 +367,125 @@ const findPhoto = (page, name) => page.evaluate(async name => {
     await A.page.screenshot({ path: path.join(OUT, '04-A-photo-de-B.png') });
     await A.page.click('#viewerCloseBtn');
 
+    // ---------- Suppressions croisées : rien ne se perd ----------
+    // Aides : album et photos ajoutés directement (sans écran), état d'une photo ici et en ligne.
+    const [jNara, jKyoto, jGeisha, jOsaka, jTako] = await makeJpegs(A.page, ['Daim', 'Torii', 'Geisha', 'Chateau', 'Tako']);
+    const putAlbum = (page, name, photos) => page.evaluate(async ([name, photos]) => {
+      const albumId = await dbPut('folders', { kind: 'photos', name, createdAt: Date.now() });
+      for (const [label, b64] of photos) {
+        const blob = new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: 'image/jpeg' });
+        await dbPut('photos', { albumId, blob, thumb: blob, width: 1600, height: 1200, name: label + '.jpg', takenAt: Date.now(), createdAt: Date.now() });
+        await new Promise(r => setTimeout(r, 3));
+      }
+      clearTimeout(cloudPublishTimer);
+      return albumId;
+    }, [name, photos]);
+    const addPhoto = (page, album, label, b64) => page.evaluate(async ([album, label, b64]) => {
+      const a = (await dbGetAll('folders')).find(f => f.kind === 'photos' && f.name === album);
+      const blob = new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: 'image/jpeg' });
+      await dbPut('photos', { albumId: a.id, blob, thumb: blob, width: 1600, height: 1200, name: label + '.jpg', takenAt: Date.now(), createdAt: Date.now() });
+      clearTimeout(cloudPublishTimer);
+    }, [album, label, b64]);
+    // Supprime ici un album (avec ses photos) ou une photo, sans synchroniser tout de suite.
+    const dropAlbum = (page, album) => page.evaluate(async album => {
+      const a = (await dbGetAll('folders')).find(f => f.kind === 'photos' && f.name === album);
+      const photos = (await dbGetAll('photos')).filter(p => p.albumId === a.id);
+      await dbWrite(['folders', 'photos'], tx => { tx.objectStore('folders').delete(a.id); photos.forEach(p => tx.objectStore('photos').delete(p.id)); });
+      clearTimeout(cloudPublishTimer);
+    }, album);
+    const ridOf = (page, find) => page.evaluate(async src => { const p = (await dbGetAll('photos')).find(eval(src)); return p ? photoRemoteId(p) : null; }, find.toString());
+    const photoOn = (page, rid) => page.evaluate(async rid => {
+      const p = (await dbGetAll('photos')).find(x => photoRemoteId(x) === rid);
+      if (!p) return null;
+      const a = (await dbGetAll('folders')).find(f => f.id === p.albumId);
+      return (a ? a.name : '?') + ' | ' + (p.caption || '') + ' | ' + (p.location || '');
+    }, rid);
+    const photoOnline = async rid => {
+      const f = (await admin('GET', 'users/' + uid + '/photos/' + rid)).fields || {};
+      return f.deleted ? 'supprimée' : (f.caption ? f.caption.stringValue : '') + ' | ' + (f.location ? f.location.stringValue : '');
+    };
+    const albumsOn = page => page.evaluate(async () => {
+      const photos = await dbGetAll('photos');
+      return (await dbGetAll('folders')).filter(f => f.kind === 'photos').map(f => f.name + '(' + photos.filter(p => p.albumId === f.id).length + ')').sort().join(' ');
+    });
+    const publishOnly = page => page.evaluate(async () => {
+      cloudSyncAgain = false;
+      const r = await Promise.all([dbGetAll('folders'), dbGetAll('photos'), loadPublished()]);
+      await publishChanges(r[0].filter(isAlbum), r[1], r[2]);
+      const again = cloudSyncAgain;
+      cloudSyncAgain = false;
+      return again;
+    });
+
+    // 1. Photo supprimée sur A pendant que B la modifie : la suppression est refusée, elle revient.
+    const chatRid = await ridOf(B.page, x => x.caption === 'Mon chat');
+    await B.page.evaluate(async rid => { const p = (await dbGetAll('photos')).find(x => photoRemoteId(x) === rid); await setPhotoInfo(p, 'Mon chat adoré', p.location); clearTimeout(cloudPublishTimer); }, chatRid);
+    await syncNowAndWait(B.page);
+    await A.page.evaluate(async rid => { const p = (await dbGetAll('photos')).find(x => photoRemoteId(x) === rid); await dbDelete('photos', p.id); clearTimeout(cloudPublishTimer); }, chatRid);
+    const refusedDelete = await publishOnly(A.page);
+    check(refusedDelete && await photoOnline(chatRid) === 'Mon chat adoré | Lyon, France', 'photo supprimée sur A sans avoir vu la modification de B : suppression refusée, rien de perdu en ligne');
+    await syncNowAndWait(A.page);
+    check(await photoOn(A.page, chatRid) === 'Perso | Mon chat adoré | Lyon, France' && await photoOn(B.page, chatRid) === 'Perso | Mon chat adoré | Lyon, France',
+      '… elle revient sur A, avec la modification de B (' + await photoOn(A.page, chatRid) + ')');
+
+    // 2. Dans l'autre ordre : supprimée sur A (envoyé), puis modifiée sur B qui ne l'a pas encore vu.
+    const plageRid = await ridOf(B.page, x => x.name === 'Plage.jpg');
+    await A.page.evaluate(async rid => { const p = (await dbGetAll('photos')).find(x => photoRemoteId(x) === rid); await dbDelete('photos', p.id); clearTimeout(cloudPublishTimer); }, plageRid);
+    await syncNowAndWait(A.page);
+    check(await photoOnline(plageRid) === 'supprimée', 'photo supprimée sur A : supprimée en ligne');
+    await B.page.evaluate(async rid => { const p = (await dbGetAll('photos')).find(x => photoRemoteId(x) === rid); await setPhotoInfo(p, 'Plage de Kamakura', ''); clearTimeout(cloudPublishTimer); }, plageRid);
+    const plageState = await syncNowAndWait(B.page).then(() => B.page.evaluate(() => cloudStatus.state));
+    check(plageState === 'done' && await photoOnline(plageRid) === 'Plage de Kamakura | ' && await photoOn(B.page, plageRid) === 'Perso | Plage de Kamakura | ',
+      'B la modifie sans avoir vu la suppression : elle est gardée, et renvoyée en ligne (' + await photoOnline(plageRid) + ')');
+    await syncNowAndWait(A.page);
+    check(await photoOn(A.page, plageRid) === 'Perso | Plage de Kamakura | ', '… et revient sur A');
+
+    // 3. Album renommé sur B pendant que A le supprime : il revient (renommé) ; sa photo, inchangée, part.
+    await putAlbum(A.page, 'Nara', [['Daim', jNara]]);
+    await syncNowAndWait(A.page);
+    await syncNowAndWait(B.page);
+    await B.page.evaluate(async () => { const a = (await dbGetAll('folders')).find(f => f.name === 'Nara'); a.name = 'Nara (cerfs)'; await dbPut('folders', a); clearTimeout(cloudPublishTimer); });
+    await syncNowAndWait(B.page);
+    await dropAlbum(A.page, 'Nara');
+    const refusedAlbum = await publishOnly(A.page);
+    await syncNowAndWait(A.page);
+    await syncNowAndWait(B.page);
+    check(refusedAlbum && /Nara \(cerfs\)\(0\)/.test(await albumsOn(A.page)) && /Nara \(cerfs\)\(0\)/.test(await albumsOn(B.page)),
+      'album supprimé sur A pendant que B le renommait : il revient, renommé (sa photo, inchangée, est bien supprimée)');
+
+    // 4. Album supprimé sur A pendant que B y ajoute une photo : il revient, avec elle.
+    await putAlbum(A.page, 'Kyoto', [['Torii', jKyoto]]);
+    await syncNowAndWait(A.page);
+    await syncNowAndWait(B.page);
+    await addPhoto(B.page, 'Kyoto', 'Geisha', jGeisha);
+    await syncNowAndWait(B.page);
+    await dropAlbum(A.page, 'Kyoto');
+    await syncNowAndWait(A.page);
+    await syncNowAndWait(B.page);
+    const kyoto = [await albumsOn(A.page), await albumsOn(B.page)].map(s => (s.match(/Kyoto\(\d+\)/) || ['absent'])[0]);
+    const geishaRid = await ridOf(B.page, x => x.name === 'Geisha.jpg');
+    check(kyoto.join() === 'Kyoto(1),Kyoto(1)' && /^Kyoto \| /.test(await photoOn(A.page, geishaRid) || ''),
+      'album supprimé sur A pendant que B y ajoutait une photo : il revient avec elle seule (' + kyoto.join(' / ') + ')');
+
+    // 5. Album supprimé sur A (envoyé), puis photo ajoutée dedans sur B qui ne l'a pas encore vu :
+    //    l'album est gardé sur B et renvoyé en ligne (avant la 2.4 : refusé à chaque fois).
+    await putAlbum(A.page, 'Osaka', [['Chateau', jOsaka]]);
+    await syncNowAndWait(A.page);
+    await syncNowAndWait(B.page);
+    await dropAlbum(A.page, 'Osaka');
+    await syncNowAndWait(A.page);
+    await addPhoto(B.page, 'Osaka', 'Tako', jTako);
+    const osakaState = await syncNowAndWait(B.page).then(() => B.page.evaluate(() => cloudStatus.state));
+    await syncNowAndWait(A.page);
+    const osaka = [await albumsOn(A.page), await albumsOn(B.page)].map(s => (s.match(/Osaka\(\d+\)/) || ['absent'])[0]);
+    const osakaOnline = await adminList('users/' + uid + '/albums').then(list => list.filter(d => d.fields.name && d.fields.name.stringValue === 'Osaka').length);
+    check(osakaState === 'done' && osaka.join() === 'Osaka(1),Osaka(1)' && osakaOnline === 1,
+      'photo ajoutée sur B dans un album déjà supprimé sur A : album gardé, renvoyé en ligne, revenu sur A (' + osaka.join(' / ') + ')');
+    check(sameContent(await library(A.page), await library(B.page)), 'après toutes ces suppressions croisées : A et B identiques');
+    await syncNowAndWait(mom.page);
+    const momAlbums = await mom.page.evaluate(async () => (await dbGetAll('sharedAlbums')).map(a => a.name).sort().join(', '));
+    check(/Kyoto/.test(momAlbums) && /Nara \(cerfs\)/.test(momAlbums) && /Osaka/.test(momAlbums), 'Maman voit les albums revenus (' + momAlbums + ')');
+
     for (const [who, p] of [['A', A.page], ['B', B.page], ['Maman', mom.page]]) {
       check(p.errors.length === 0, who + ' : aucune erreur' + (p.errors.length ? ' : ' + p.errors.slice(0, 3).join(' | ') : ''));
     }

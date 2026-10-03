@@ -156,6 +156,7 @@ function refreshWeather(maxAge) {
     if (!sameCity(city, weatherCity)) return null; // ville changée entre-temps
     weatherData = readWeather(json, city);
     weatherFailures = 0;
+    if (currentViewName() === 'schedule-day') refreshView(); // météo du jour dans le programme
     return dbPut('settings', { key: 'weather', value: weatherData });
   }).then(null, function (err) {
     // Réseau sans Internet (Wi-Fi d'hôtel pas encore ouvert...) : nouvel essai dans une minute.

@@ -261,6 +261,54 @@ main {
 .danger-text { color: var(--danger); }
 #expenseDeleteBtn { margin-top: 24px; }
 
+/* ---------- Programme du voyage ---------- */
+.trip-card { text-align: center; padding: 16px; }
+.trip-card.is-now { text-align: left; }
+.trip-count { margin: 4px 0 2px; font-size: 1.6rem; font-weight: 800; color: var(--accent); }
+.trip-span { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
+.trip-next { margin: 8px 0 0; font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+.trip-actions { margin-top: 12px; }
+.trip-done { text-align: center; margin: 0 0 8px; }
+.schedule-day-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  margin: 16px 0 0; padding: 8px 4px; border: none; background: transparent; text-align: left;
+  font: inherit; font-size: 0.82rem; font-weight: 700; color: var(--text-muted); cursor: pointer;
+}
+.schedule-day-head.is-today { color: var(--accent); }
+.schedule-day-head.is-past, .schedule-row.is-past { opacity: 0.55; }
+.schedule-row { gap: 8px; }
+.schedule-time { flex: 0 0 auto; width: 44px; font-size: 0.88rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.day-nav { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; }
+.day-nav-main { flex: 1; min-width: 0; text-align: center; }
+.day-nav-date { margin: 0; font-size: 1.25rem; font-weight: 800; line-height: 1.25; }
+.day-nav-sub { margin: 3px 0 0; font-size: 0.85rem; color: var(--text-muted); }
+.day-nav-btn { font-size: 1.9rem; }
+.day-nav-btn[disabled] { opacity: 0.2; }
+.day-weather {
+  display: block; margin: 0 auto 14px; padding: 6px 14px; border: none; border-radius: 100px;
+  background: var(--accent-soft); color: var(--text); font: inherit; font-size: 0.9rem;
+}
+.event-card.is-past { opacity: 0.55; }
+.event-card.is-now, .event-card.is-next { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.event-head { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.event-time { flex: 1; min-width: 0; font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); }
+.event-badge { margin: 0; white-space: nowrap; }
+.event-edit { margin: -8px -10px -8px 0; color: var(--text-muted); font-size: 1.15rem; }
+.event-title-row { display: flex; align-items: flex-start; gap: 10px; margin-top: 6px; }
+.event-icon { font-size: 1.6rem; line-height: 1.25; }
+.event-title { margin: 0; font-size: 1.2rem; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.event-place { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--divider); }
+.event-place-name { margin: 0 0 2px; font-weight: 700; overflow-wrap: anywhere; }
+.event-notes { margin-top: 10px; }
+.event-card .attachments { margin-top: 10px; }
+/* Rubriques partagées par mes proches (lecture seule) */
+.shared-note { margin: 0 0 12px; }
+.shared-entry .row-icon { font-size: 1.3rem; }
+.field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-pair .text-input { min-width: 0; }
+.button-pair { display: flex; flex-wrap: wrap; gap: 8px; }
+#eventDeleteBtn { margin-top: 24px; }
+
 /* ---------- Météo & heure ---------- */
 .weather-clock { margin: 0 0 20px; }
 .weather-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 4px 10px; }
@@ -424,6 +472,11 @@ main {
   padding: 10px 2px; outline: none;
 }
 .text-input:focus, .text-area:focus { border-color: var(--accent); }
+/* Date et heure : même hauteur vide ou remplie, texte à gauche (l'iPhone le centre sinon). */
+input[type="date"].text-input, input[type="time"].text-input, input[type="datetime-local"].text-input {
+  min-height: 44px; -webkit-appearance: none; appearance: none; text-align: left;
+}
+.text-input::-webkit-date-and-time-value { text-align: left; }
 .text-area { resize: vertical; min-height: 80px; }
 .text-area.small { min-height: 48px; }
 .md-input { min-height: 180px; line-height: 1.5; resize: none; overflow-y: auto; }

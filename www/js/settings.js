@@ -88,7 +88,7 @@ function renderBackupInfo() {
 
 /* Quelque chose à sauvegarder ? */
 function hasUserData() {
-  return Promise.all(['notes', 'addresses', 'photos', 'documents', 'expenses'].map(dbCount)).then(function (counts) {
+  return Promise.all(['notes', 'addresses', 'photos', 'documents', 'expenses', 'schedule'].map(dbCount)).then(function (counts) {
     return counts.some(function (n) { return n > 0; });
   }, function () { return false; });
 }
@@ -144,7 +144,7 @@ function appVersionText() {
 var SYNC_STATE_TEXT = { idle: 'pas encore lancée', syncing: 'en cours', done: 'à jour', offline: 'hors connexion', error: 'erreur', 'signed-out': 'session expirée' };
 
 function buildDiagnosticReport() {
-  var stores = ['notes', 'addresses', 'folders', 'photos', 'documents', 'expenses'];
+  var stores = ['notes', 'addresses', 'folders', 'photos', 'documents', 'expenses', 'schedule'];
   var signedIn = isSignedIn();
   return Promise.all([
     Promise.all(stores.map(function (s) { return dbCount(s).then(null, function () { return '?'; }); })),
@@ -159,7 +159,7 @@ function buildDiagnosticReport() {
       'Appli : ' + r[2],
       'Appareil : ' + deviceText() + (navigator.onLine === false ? ' (hors connexion)' : ''),
       'Contenu : ' + [count(0, 'note', 'notes'), count(1, 'adresse', 'adresses'), count(2, 'dossier ou album', 'dossiers et albums'),
-        count(3, 'photo', 'photos'), count(4, 'document', 'documents'), count(5, 'dépense', 'dépenses')].join(', ')
+        count(3, 'photo', 'photos'), count(4, 'document', 'documents'), count(5, 'dépense', 'dépenses'), count(6, 'étape', 'étapes')].join(', ')
     ];
     if (r[1]) lines.push('Stockage du téléphone : ' + formatSize(r[1].usage || 0) + ' utilisés' + (r[1].quota ? ' (place disponible : ' + formatSize(r[1].quota) + ')' : ''));
     var last = readPref(LAST_BACKUP_PREF);

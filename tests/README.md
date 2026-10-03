@@ -38,13 +38,15 @@ Le résumé s'affiche à la fin ; les journaux et les captures d'écran sont dan
 | `06-sessions` | connexion qui expire, mot de passe changé ailleurs |
 | `07-commentaires` | descriptions, lieux et commentaires des photos |
 | `08-images` | photos reçues qui s'affichent toujours (iPhone ↔ Android) |
-| `09-images-appareils` | mes Images identiques sur tous mes appareils, envois croisés sans rien écraser, espace en ligne |
+| `09-images-appareils` | mes Images identiques sur tous mes appareils, envois et suppressions croisés sans rien perdre, espace en ligne |
 | `10-heure-mises-a-jour` | heure Japon / France, bandeau de nouvelle version Android |
 | `11-taux-meteo` | taux du jour et météo (services simulés) |
 | `12-sauvegardes` | sauvegarde iPhone restaurée sur Android, même transformée en route |
 | `13-rubriques-appareils` | toutes mes rubriques (dépenses comprises) synchronisées entre mes appareils, appareil mis à jour depuis la 2.2 |
 | `14-telecharger` | bouton « Télécharger » des photos (galerie Android, Photos sur iPhone), plusieurs d'un coup, album entier |
 | `15-nouveautes` | convertisseur ⇄ et addition, Dépenses (totaux, export, sauvegarde), météo heure par heure, Phrases utiles, rappel de sauvegarde, rapport de diagnostic, témoin de synchronisation |
+| `16-programme` | Programme du voyage : étapes, compte à rebours, écran « Aujourd'hui » (téléphone à l'heure de Tokyo, date fixée par le test), lieux, billets, sauvegarde |
+| `17-partage-rubriques` | programme, carnet d'adresses, notes et documents partagés avec un proche, en lecture seule (hors connexion, changements suivis, partage retiré) |
 
 Les services publics (taux du jour, météo, GitHub) sont coupés ou simulés pendant les tests, pour
 des résultats toujours identiques (`lib/block-external.js`). Un autre emplacement de Chrome se donne

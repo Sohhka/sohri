@@ -331,7 +331,7 @@ const value = (page, sel) => page.inputValue(sel).then(norm);
       await page.click('#diagnosticBtn');
       await page.waitForFunction(() => window.__bridge.texts.length === 1);
       const report = await page.evaluate(() => window.__bridge.texts[0]);
-      check(/^Rapport SOHRI du /.test(report) && /Appli : appli Android 2\.3/.test(report) && /Contenu : 1 note, 0 adresse, 0 dossier ou album, 0 photo, 0 document, 0 dépense\n/.test(report) && /Dernière sauvegarde : aujourd'hui/.test(report),
+      check(/^Rapport SOHRI du /.test(report) && /Appli : appli Android 2\.3/.test(report) && /Contenu : 1 note, 0 adresse, 0 dossier ou album, 0 photo, 0 document, 0 dépense, 0 étape\n/.test(report) && /Dernière sauvegarde : aujourd'hui/.test(report),
         'rapport : version, contenu (nombres), dernière sauvegarde');
       check(/Compte : aucun/.test(report) && /Météo pas encore reçue Failed to fetch/.test(report), 'rapport : compte, et dernières erreurs');
       check(!/Itinéraire|Tokyo, Kyoto/.test(report), 'rapport : rien de personnel (ni titre ni texte de note)');

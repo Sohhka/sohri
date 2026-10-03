@@ -33,6 +33,20 @@ service cloud.firestore {
       return signedIn() && (me() == owner
         || (exists(grantDoc(owner, me())) && category in get(grantDoc(owner, me())).data.categories));
     }
+    // Rubriques partagées en lecture, élément par élément (voir « items ») : programme, carnet
+    // d'adresses, notes, documents ; les dossiers vont avec les notes et les documents.
+    function itemCategory(kind) {
+      return kind == 'event' ? 'schedule' : kind == 'address' ? 'addresses' : kind == 'note' ? 'notes' : kind == 'document' ? 'documents' : 'none';
+    }
+    function canReadItem(owner, kind) {
+      return canRead(owner, itemCategory(kind)) || (kind == 'folder' && (canRead(owner, 'notes') || canRead(owner, 'documents')));
+    }
+    // Un proche qui voit au moins une de ces rubriques lit leurs fichiers, un par un, par leur
+    // empreinte (qu'il ne connaît que par les éléments partagés) ; jamais leur liste.
+    function sharesItems(owner) {
+      return signedIn() && exists(grantDoc(owner, me()))
+        && get(grantDoc(owner, me())).data.categories.hasAny(['schedule', 'addresses', 'notes', 'documents']);
+    }
 
     function validText(value, max) { return value is string && value.size() >= 1 && value.size() <= max; }
     function validCode(code) { return code is string && code.matches('[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}'); }
@@ -164,20 +178,23 @@ service cloud.firestore {
       }
 
       // Toutes mes rubriques entre mes appareils (réglage syncAll) : notes, adresses, dossiers,
-      // documents et dépenses (items : description en JSON, et empreintes de leurs fichiers), leurs fichiers
-      // (blobs : un par contenu, nommé par son empreinte SHA-256) et leurs morceaux (blobParts).
-      // Visibles de leur seul propriétaire : jamais des proches, même de ceux qui voient ses Images.
+      // documents, dépenses et programme (items : description en JSON, et empreintes de leurs
+      // fichiers), leurs fichiers (blobs : un par contenu, nommé par son empreinte SHA-256) et leurs
+      // morceaux (blobParts). Visibles de leur seul propriétaire, sauf les rubriques qu'il partage
+      // (en lecture) avec un proche ; les dépenses, jamais.
       match /items/{itemId} {
-        allow read, delete: if signedIn() && uid == me();
+        allow read: if signedIn() && (uid == me() || canReadItem(uid, resource.data.kind));
+        allow delete: if signedIn() && uid == me();
         allow create, update: if writesOwn(uid) && itemId.size() <= 80 && (tombstone(request.resource.data) || (
           onlyKeys(request.resource.data, ['kind', 'data', 'blobs', 'updatedAt'])
-          && request.resource.data.kind in ['note', 'address', 'folder', 'document', 'expense']
+          && request.resource.data.kind in ['note', 'address', 'folder', 'document', 'expense', 'event']
           && request.resource.data.data is string && request.resource.data.data.size() <= 900000
           && request.resource.data.blobs is list && request.resource.data.blobs.size() <= 500
           && request.resource.data.updatedAt == request.time));
       }
       match /blobs/{blobId} {
-        allow read, delete: if signedIn() && uid == me();
+        allow get: if signedIn() && (uid == me() || sharesItems(uid));
+        allow list, delete: if signedIn() && uid == me();
         allow create, update: if writesOwn(uid) && blobId.matches('[0-9a-f]{64}')
           && onlyKeys(request.resource.data, ['size', 'type', 'parts', 'createdAt'])
           && request.resource.data.size is int && request.resource.data.size >= 0 && request.resource.data.size <= 62914560
@@ -186,7 +203,8 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time;
       }
       match /blobParts/{partId} {
-        allow read, delete: if signedIn() && uid == me();
+        allow get: if signedIn() && (uid == me() || sharesItems(uid));
+        allow list, delete: if signedIn() && uid == me();
         allow create, update: if writesOwn(uid) && partId.matches('[0-9a-f]{64}-[0-9]{1,2}')
           && onlyKeys(request.resource.data, ['data'])
           && request.resource.data.data is bytes && request.resource.data.data.size() <= 950000;
@@ -202,8 +220,8 @@ service cloud.firestore {
         && request.resource.data.to is string && request.resource.data.to != me()
         && grantId == me() + '_' + request.resource.data.to
         && validText(request.resource.data.ownerName, 40)
-        && request.resource.data.categories is list && request.resource.data.categories.size() <= 4
-        && request.resource.data.categories.hasOnly(['albums', 'notes', 'addresses', 'documents'])
+        && request.resource.data.categories is list && request.resource.data.categories.size() <= 5
+        && request.resource.data.categories.hasOnly(['albums', 'schedule', 'addresses', 'notes', 'documents'])
         && request.resource.data.updatedAt == request.time
         && exists(userDoc(request.resource.data.to));
       allow delete: if signedIn() && resource.data.owner == me();

@@ -79,6 +79,16 @@ function renderSharing() {
     ]));
   }
 
+  // Leurs autres rubriques (programme, adresses…) sont en haut des rubriques du même nom.
+  cloudState.grantsToMe.forEach(function (g) {
+    var labels = g.categories.filter(function (c) { return CLOUD_CATEGORIES[c] && CLOUD_CATEGORIES[c].items; }).map(function (c) {
+      return CLOUD_CATEGORIES[c].icon + ' ' + CLOUD_CATEGORIES[c].label;
+    });
+    if (labels.length) {
+      box.appendChild(h('p', { className: 'hint images-hint', text: g.name + ' te partage aussi : ' + labels.join(', ') + ' (en lecture seule), en haut de ces rubriques.' }));
+    }
+  });
+
   renderSyncAll(box);
   renderUsage(box);
 
@@ -128,8 +138,8 @@ function renderSyncAll(box) {
     h('span', { className: 'list-row-main' }, [
       h('span', { className: 'list-row-title', text: 'Synchroniser toutes mes rubriques' }),
       h('span', { className: 'list-row-sub', text: enabled
-        ? 'Notes, adresses, dépenses, images et documents : les mêmes sur tous tes appareils connectés à ce compte.'
-        : 'Pour retrouver tes notes, adresses, dépenses, images et documents sur tous tes appareils connectés à ce compte.' })
+        ? 'Programme, notes, adresses, dépenses, images et documents : les mêmes sur tous tes appareils connectés à ce compte.'
+        : 'Pour retrouver ton programme, tes notes, adresses, dépenses, images et documents sur tous tes appareils connectés à ce compte.' })
     ]),
     checkbox
   ]));
@@ -188,8 +198,10 @@ function renderUsage(box) {
 
 function setSyncAll(wanted) {
   var question = wanted
-    ? 'Synchroniser toutes tes rubriques ? Tes notes, adresses, dépenses, images et documents (avec leurs photos et fichiers joints) seront envoyés sur le serveur Firebase (Google), visibles de toi seul, puis reçus par tes autres appareils connectés à ce compte. Rien n\'est effacé : ce que chaque appareil a déjà est réuni. Le serveur gratuit offre 1 Go en tout.'
-    : 'Arrêter la synchronisation ? Ta copie en ligne sera effacée ; chaque appareil garde ce qu\'il a.' + (sharedWith('albums').length ? ' Tes Images restent en ligne pour tes proches.' : '');
+    ? 'Synchroniser toutes tes rubriques ? Tes notes, adresses, dépenses, programme, images et documents (avec leurs photos et fichiers joints) seront envoyés sur le serveur Firebase (Google), visibles de toi seul, puis reçus par tes autres appareils connectés à ce compte. Rien n\'est effacé : ce que chaque appareil a déjà est réuni. Le serveur gratuit offre 1 Go en tout.'
+    : 'Arrêter la synchronisation ? Ta copie en ligne sera effacée ; chaque appareil garde ce qu\'il a.' +
+      (sharesItemCategories() ? ' Tes proches ne verront plus ce que tu leur partages (programme, adresses, notes, documents).' : '') +
+      (sharedWith('albums').length ? ' Tes Images restent en ligne pour tes proches.' : '');
   uiConfirm(question, wanted ? 'Synchroniser' : 'Arrêter', !wanted).then(function (ok) {
     if (!ok) return;
     var progress = wanted ? null : showProgress('Arrêt de la synchronisation…');
@@ -426,11 +438,22 @@ defineView('share-category', {
   enter: renderShareCategory
 });
 
+// Ce que voient les proches, rubrique par rubrique (écran « Partager : … »).
+var SHARE_INTROS = {
+  albums: 'Choisis qui peut voir tes albums photo, avec leurs photos. Tes proches ne peuvent ni les modifier, ni les supprimer.',
+  schedule: 'Choisis qui peut voir ton programme : les étapes jour par jour, leurs lieux (adresse, pour l\'itinéraire et le taxi), leurs notes et leurs billets.',
+  addresses: 'Choisis qui peut voir ton carnet d\'adresses : les lieux, leurs adresses (en japonais aussi, pour le taxi), téléphones et pièces jointes.',
+  notes: 'Choisis qui peut voir tes notes, avec leurs photos et pièces jointes, rangées dans leurs dossiers.',
+  documents: 'Choisis qui peut voir tes documents (billets, réservations…), rangés dans leurs dossiers.'
+};
+var SHARE_WHAT = { schedule: 'ton programme', addresses: 'ton carnet d\'adresses', notes: 'tes notes', documents: 'tes documents' };
+
 function renderShareCategory(params) {
   var category = params.category;
+  var items = !!(CLOUD_CATEGORIES[category] && CLOUD_CATEGORIES[category].items);
   var box = byId('shareCategoryContent');
   box.innerHTML = '';
-  box.appendChild(h('p', { className: 'hint', text: 'Choisis qui peut voir tes albums photo, avec leurs photos. Tes proches ne peuvent ni les modifier, ni les supprimer.' }));
+  box.appendChild(h('p', { className: 'hint', text: (SHARE_INTROS[category] || '') + (items ? ' En lecture seule : tes proches ne peuvent rien y changer.' : '') }));
   if (!cloudState.contacts.length) {
     box.appendChild(h('p', { className: 'empty', text: "Ajoute d'abord un contact avec son code, depuis l'écran Partage." }));
   }
@@ -441,9 +464,21 @@ function renderShareCategory(params) {
       var wanted = checkbox.checked;
       shareToggleBusy = true;
       setTogglesDisabled(true);
-      cloudSetShare(category, contact.uid, wanted).then(function () {
-        showToast(wanted ? 'Partagé avec ' + contact.name : 'Plus partagé avec ' + contact.name);
-      }, function (err) {
+      // Programme, adresses, notes, documents : partagés depuis mes rubriques en ligne (toutes mes
+      // rubriques synchronisées) ; la synchronisation est proposée au premier partage.
+      var ready = wanted && items && !syncAllEnabled()
+        ? uiConfirm('Pour partager ' + SHARE_WHAT[category] + ', tes rubriques doivent être en ligne : « Synchroniser toutes mes rubriques » sera activé (elles restent visibles de toi seul, sauf ce que tu partages ; jamais tes dépenses). Continuer ?', 'Activer et partager')
+            .then(function (ok) { return ok ? cloudSetSyncAll(true).then(function () { return true; }) : false; })
+        : Promise.resolve(true);
+      ready.then(function (ok) {
+        if (!ok) {
+          checkbox.checked = false;
+          return null;
+        }
+        return cloudSetShare(category, contact.uid, wanted).then(function () {
+          showToast(wanted ? 'Partagé avec ' + contact.name : 'Plus partagé avec ' + contact.name);
+        });
+      }).then(null, function (err) {
         checkbox.checked = !wanted;
         uiAlert(cloudErrorText(err));
       }).then(function () {
@@ -457,6 +492,10 @@ function renderShareCategory(params) {
       checkbox
     ]));
   });
+  if (items) {
+    box.appendChild(h('p', { className: 'hint', text: 'Tes rubriques sont en ligne avec « Synchroniser toutes mes rubriques » (Partage → Mes appareils), visibles de toi seul : tes proches ne voient que celles que tu leur partages, jamais tes dépenses. Ils en gardent une copie sur leur téléphone, mise à jour quand ils ont Internet ; arrêter le partage la retire de chez eux.' }));
+    return;
+  }
   if (sharedWith(category).length) {
     box.appendChild(h('div', { className: 'card source-card' }, [
       h('p', { className: 'card-text', text: '📱 Tes Images sont les mêmes sur tous les appareils connectés à ton compte : chacun peut en ajouter, les modifier ou en supprimer.' }),
@@ -464,7 +503,7 @@ function renderShareCategory(params) {
     ]));
     updateStatusLine();
   }
-  box.appendChild(h('p', { className: 'hint', text: "Les photos sont envoyées réduites sur le serveur Firebase (Google), avec leur description ; tes proches peuvent les commenter. Tes autres appareils en reçoivent une copie. Tes proches ne voient jamais tes autres rubriques. Arrêter tous les partages efface les commentaires du serveur, et les photos aussi si tu ne synchronises pas toutes tes rubriques (chaque appareil garde les siennes)." }));
+  box.appendChild(h('p', { className: 'hint', text: "Les photos sont envoyées réduites sur le serveur Firebase (Google), avec leur description ; tes proches peuvent les commenter. Tes autres appareils en reçoivent une copie. Tes proches ne voient que les rubriques que tu leur partages. Arrêter tous les partages efface les commentaires du serveur, et les photos aussi si tu ne synchronises pas toutes tes rubriques (chaque appareil garde les siennes)." }));
 }
 
 function setTogglesDisabled(disabled) {

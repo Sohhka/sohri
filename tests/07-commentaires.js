@@ -368,7 +368,9 @@ async function run(engineName) {
   await mom.page.fill('#commentInput', 'Écrit dans le métro 📴');
   await mom.page.click('#commentSendBtn');
   await mom.page.waitForSelector('#photoComments .comment.is-pending', { timeout: 20000 });
-  check(norm(await mom.page.textContent('#photoComments .comment.is-pending')).includes("envoi au retour d'Internet"), 'hors connexion : commentaire gardé, « envoi au retour d\'Internet »');
+  // (« ⏳ envoi… » d'abord, puis la raison, une fois l'envoi tenté)
+  const waitingLabel = await mom.page.waitForFunction(() => /envoi au retour d'Internet/.test((document.querySelector('#photoComments .comment.is-pending') || {}).textContent || ''), null, { timeout: 20000 }).then(() => true, () => false);
+  check(waitingLabel, 'hors connexion : commentaire gardé, « envoi au retour d\'Internet »');
   await mom.page.screenshot({ path: shots + '/06-hors-connexion.png' });
   await goOnline(engineName, mom.context);
   await mom.page.evaluate(() => syncNow());

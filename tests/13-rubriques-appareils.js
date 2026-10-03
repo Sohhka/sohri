@@ -209,7 +209,7 @@ const PAGE_HELPERS = () => {
       const aname = id => (addresses.find(a => a.id === id) || {}).title || '-';
       const out = [];
       for (const f of folders) out.push('F ' + f.kind + ' ' + f.name + (f.fromAccount ? ' *' : ''));
-      for (const a of addresses) out.push('A ' + a.title + ' | ' + a.description + ' | ' + a.addressJa + (a.fromAccount ? ' *' : ''));
+      for (const a of addresses) out.push('A ' + a.title + ' | ' + a.description + ' | ' + a.addressJa + ' | ' + a.address + (a.fromAccount ? ' *' : ''));
       for (const n of await dbGetAll('notes')) {
         const imgs = [];
         for (const i of n.images || []) imgs.push(await short(i));
@@ -219,6 +219,11 @@ const PAGE_HELPERS = () => {
       }
       for (const e of await dbGetAll('expenses')) {
         out.push('E ' + (e.label || '-') + ' | ' + e.amount + ' ' + e.currency + ' | ' + e.category + ' | ' + e.rate + ' | ' + new Date(e.spentAt).toISOString() + (e.fromAccount ? ' *' : ''));
+      }
+      for (const v of await dbGetAll('schedule')) {
+        const atts = [];
+        for (const a of v.attachments || []) atts.push(a.name + '=' + await short(a.blob));
+        out.push('V ' + v.title + ' | ' + v.date + ' ' + v.time + ' | ' + v.type + ' | ' + aname(v.addressId) + ' | ' + v.notes + ' | ' + atts.join(',') + (v.fromAccount ? ' *' : ''));
       }
       for (const d of await dbGetAll('documents')) {
         const file = d.fileId != null ? await dbGet('documentFiles', d.fileId) : null;
@@ -261,6 +266,13 @@ const itemData = doc => JSON.parse(doc.fields.data.stringValue);
       await t13.document('assurance.txt', 'text/plain', btoa('Assurance voyage n° 42'), null, null);
       const spent = Date.parse('2026-10-01T12:30:00Z');
       await dbPut('expenses', { amount: 980, currency: 'JPY', rate: 184.5, category: 'repas', label: 'Ichiran', spentAt: spent, createdAt: spent, updatedAt: spent });
+      // Une étape du programme à l'hôtel, avec un billet (même contenu que la pièce jointe de la
+      // note : envoyé une seule fois).
+      const menu = t13.blob(btoa('Menu : tonkotsu 980 ¥'), 'text/plain');
+      await dbPut('schedule', {
+        date: '2026-10-15', time: '15:00', endTime: '', title: 'Check-in', type: 'hebergement', addressId: hotel, notes: 'Réservation 42',
+        attachments: [{ id: 'attv1', name: 'menu.txt', type: 'text/plain', size: menu.size, blob: menu }], createdAt: Date.now(), updatedAt: Date.now()
+      });
       return { tokyo, billets, hotel, ramen };
     }, [imgRamen, imgTemple, pdf, imgThumb]);
     // Un album (Images), qui suivra aussi, sans être partagé avec personne.
@@ -293,9 +305,9 @@ const itemData = doc => JSON.parse(doc.fields.data.stringValue);
     check(profileDoc.fields.syncAll && profileDoc.fields.syncAll.booleanValue === true, 'réglage enregistré sur le compte (vaut pour tous mes appareils)');
     const online1 = await liveItems(uid);
     const kinds1 = online1.map(d => d.fields.kind.stringValue).sort().join(',');
-    check(kinds1 === 'address,document,document,expense,folder,folder,note,note', 'en ligne : 2 dossiers, 1 adresse, 2 notes, 2 documents, 1 dépense (' + kinds1 + ')');
+    check(kinds1 === 'address,document,document,event,expense,folder,folder,note,note', 'en ligne : 2 dossiers, 1 adresse, 2 notes, 2 documents, 1 dépense, 1 étape du programme (' + kinds1 + ')');
     const blobs1 = await countOf(uid, 'blobs');
-    check(blobs1 === 6, 'fichiers en ligne : 2 photos, 1 pièce jointe, 1 miniature, 2 contenus de documents (' + blobs1 + ')');
+    check(blobs1 === 6, 'fichiers en ligne : 2 photos, 1 pièce jointe (aussi billet de l\'étape : envoyée une fois), 1 miniature, 2 contenus de documents (' + blobs1 + ')');
     const ramenDoc = online1.find(d => d.fields.kind.stringValue === 'note' && itemData(d).title === 'Ramen');
     const ramenData = ramenDoc && itemData(ramenDoc);
     check(ramenData && ramenData.folder && ramenData.address && ramenData.images.length === 2 && ramenData.attachments[0].blob.$blob.length === 64,
@@ -340,7 +352,8 @@ const itemData = doc => JSON.parse(doc.fields.data.stringValue);
     const kyotoOnB = await B.page.evaluate(async () => (await dbGetAll('folders')).some(f => f.kind === 'photos' && f.name === 'Kyoto' && f.fromAccount) && (await dbGetAll('photos')).length === 1);
     check(kyotoOnB, 'Images : l\'album de A arrive sur B (sans partage)');
     const online2 = await liveItems(uid);
-    check(online2.length === 11, 'en ligne : 11 éléments, sans doublon (' + online2.length + ')');
+    check(online2.length === 12, 'en ligne : 12 éléments, sans doublon (' + online2.length + ')');
+    check(sumB.some(l => /^V Check-in \| 2026-10-15 15:00 \| hebergement \| Hôtel Shinjuku \| Réservation 42 \| menu\.txt=\w+ \*$/.test(l)), 'B : l\'étape du programme de A, avec son lieu (carnet) et son billet');
     check(sumB.some(l => l === 'E Ichiran | 980 JPY | repas | 184.5 | 2026-10-01T12:30:00.000Z *'), 'B : la dépense de A, avec son taux et sa date');
 
     // ---------- Affichage sur l'iPhone (A) : note venue de B, photo lisible ----------
@@ -366,6 +379,7 @@ const itemData = doc => JSON.parse(doc.fields.data.stringValue);
       await t13.edit('documents', d => d.name === 'assurance.txt', d => { d.folderId = billets.id; d.name = 'assurance-voyage.txt'; d.updatedAt = Date.now(); });
       await t13.edit('addresses', a => a.title === 'Chez Tanaka', a => { a.description = 'Réserver la veille'; a.updatedAt = Date.now(); });
       await t13.edit('expenses', e => e.label === 'Ichiran', e => { e.amount = 1180; e.category = 'shopping'; e.updatedAt = Date.now(); });
+      await t13.edit('schedule', v => v.title === 'Check-in', v => { v.time = '15:30'; v.notes = 'Réservation 42, chambre 1205'; v.updatedAt = Date.now(); });
     });
     await syncNowAndWait(A.page);
     await syncNowAndWait(B.page);
@@ -383,7 +397,8 @@ const itemData = doc => JSON.parse(doc.fields.data.stringValue);
     check(listed && await B.page.evaluate(() => currentViewName() === 'notes'), 'B : la liste des notes affichée se met à jour toute seule (« Nouvelle de A »)');
     const renamedDocs = await B.page.evaluate(async () => (await dbGetAll('documents')).length);
     check(renamedDocs === 2, 'renommer un document ne le duplique pas (' + renamedDocs + ' documents)');
-    check((await liveItems(uid)).length === 12, 'en ligne : 12 éléments (renommage et déplacement sans doublon)');
+    check(sumA3.some(l => /^V Check-in \| 2026-10-15 15:30 \| hebergement \| Hôtel Shinjuku \| Réservation 42, chambre 1205 \|/.test(l)), 'étape modifiée sur B (heure, notes) : suivie sur A');
+    check((await liveItems(uid)).length === 13, 'en ligne : 13 éléments (renommage et déplacement sans doublon)');
 
     // B était resté en 2.2 : il passait les dépenses reçues (type inconnu) sans les retenir, tout en
     // avançant son repère. Mis à jour en 2.3, il les relit une fois en entier.
@@ -399,7 +414,7 @@ const itemData = doc => JSON.parse(doc.fields.data.stringValue);
     const upgraded = await syncNowAndWait(B.page);
     const expensesOnB = await B.page.evaluate(async () => (await dbGetAll('expenses')).map(e => e.label + ' ' + e.amount + (e.fromAccount ? ' *' : '')).join());
     check(upgraded === 'done' && expensesOnB === 'Ichiran 1180 *', 'appareil mis à jour depuis la 2.2 : les dépenses déjà en ligne arrivent (' + expensesOnB + ')');
-    check(await B.page.evaluate(() => cloudGet('ikinds')).then(k => k.join()) === 'address,document,expense,folder,note' && (await liveItems(uid)).length === 12,
+    check(await B.page.evaluate(() => cloudGet('ikinds')).then(k => k.join()) === 'address,document,event,expense,folder,note' && (await liveItems(uid)).length === 13,
       '… une seule fois (types connus notés), sans rien renvoyer');
 
     // ---------- Conflit : la même note modifiée des deux côtés : la plus récente gagne ----------

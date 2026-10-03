@@ -69,6 +69,7 @@ function renderDocuments(params) {
   var folderId = params.folderId || null;
   var query = normalizeText(byId('docsSearch').value.trim());
   byId('docsSearch').placeholder = folderId ? 'Rechercher dans ce dossier' : 'Rechercher un document';
+  renderSharedEntries('documents', byId('docsShared'), !folderId && !query); // documents de mes proches (shared-items.js)
   return Promise.all([dbGetAll('documents'), listFolders('documents')]).then(function (results) {
     if (renderId !== documentsRenderId) return;
     releaseBlobUrls('documents');

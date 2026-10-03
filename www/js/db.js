@@ -1,9 +1,10 @@
 /* ---------- Base de données locale (IndexedDB) ---------- */
 var DB_NAME = 'travelAppDB';
-var DB_VERSION = 6;
+var DB_VERSION = 7;
 // Magasins des données de l'utilisateur (ceux des sauvegardes). Le partage (cloud.js) a les siens :
-// « cloud », « sharedAlbums », « sharedPhotos », « sharedComments », jamais sauvegardés.
-var DB_STORES = ['notes', 'addresses', 'settings', 'folders', 'photos', 'documents', 'documentFiles', 'expenses'];
+// « cloud », « sharedAlbums », « sharedPhotos », « sharedComments », « sharedItems »,
+// « sharedFiles », jamais sauvegardés.
+var DB_STORES = ['notes', 'addresses', 'settings', 'folders', 'photos', 'documents', 'documentFiles', 'expenses', 'schedule'];
 
 function openDB() {
   return new Promise(function (resolve, reject) {
@@ -55,6 +56,17 @@ function openDB() {
       // Version 6 : dépenses du voyage.
       if (!db.objectStoreNames.contains('expenses')) {
         db.createObjectStore('expenses', { keyPath: 'id', autoIncrement: true });
+      }
+      // Version 7 : programme du voyage ; notes, adresses, documents et programmes que les proches
+      // me partagent (description, et fichiers par empreinte).
+      if (!db.objectStoreNames.contains('schedule')) {
+        db.createObjectStore('schedule', { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains('sharedItems')) {
+        db.createObjectStore('sharedItems', { keyPath: 'key' }).createIndex('owner', 'owner');
+      }
+      if (!db.objectStoreNames.contains('sharedFiles')) {
+        db.createObjectStore('sharedFiles', { keyPath: 'hash' });
       }
     };
     req.onsuccess = function (e) {

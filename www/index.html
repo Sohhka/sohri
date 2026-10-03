@@ -81,6 +81,7 @@
       <div class="drawer-panel">
         <p class="drawer-title">SOHRI</p>
         <button class="drawer-item" type="button" data-section="converter"><span class="drawer-icon">💴</span>Convertisseur ¥ ⇄ €</button>
+        <button class="drawer-item" type="button" data-section="schedule"><span class="drawer-icon">📅</span>Programme</button>
         <button class="drawer-item" type="button" data-section="expenses"><span class="drawer-icon">🧾</span>Dépenses</button>
         <button class="drawer-item" type="button" data-section="weather"><span class="drawer-icon">🌤️</span>Météo &amp; heure</button>
         <button class="drawer-item" type="button" data-section="notes"><span class="drawer-icon">📝</span>Notes</button>
@@ -148,6 +149,50 @@
         <p id="rateNote" class="footnote">Taux indicatif : il se met à jour tout seul dès que tu as Internet. Fonctionne sans connexion.</p>
       </section>
 
+      <!-- PROGRAMME : le voyage jour par jour (le mien, ou celui d'un proche) -->
+      <section id="view-schedule" class="view" hidden>
+        <div id="scheduleShared"></div>
+        <div id="scheduleContent"></div>
+        <p id="scheduleEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- UNE JOURNÉE DU PROGRAMME (« Aujourd'hui » pendant le voyage) -->
+      <section id="view-schedule-day" class="view" hidden>
+        <div id="scheduleDay"></div>
+      </section>
+
+      <!-- UNE ÉTAPE DU PROGRAMME : nouvelle ou modifiée -->
+      <section id="view-schedule-edit" class="view" hidden>
+        <label for="eventTitle" class="field-label">Étape</label>
+        <input id="eventTitle" type="text" class="text-input" maxlength="100" placeholder="Ex. : Shinkansen pour Kyoto, visite du Kinkaku-ji…">
+        <span class="field-label">Type</span>
+        <div id="eventTypes" class="chip-row wrap"></div>
+        <label for="eventDate" class="field-label">Date</label>
+        <input id="eventDate" type="date" class="text-input">
+        <div class="field-pair">
+          <div>
+            <label for="eventTime" class="field-label">Heure <span class="optional">(facultatif)</span></label>
+            <input id="eventTime" type="time" class="text-input">
+          </div>
+          <div>
+            <label for="eventEnd" class="field-label">Fin <span class="optional">(facultatif)</span></label>
+            <input id="eventEnd" type="time" class="text-input">
+          </div>
+        </div>
+        <span class="field-label">Lieu <span class="optional">(carnet d'adresses)</span></span>
+        <button id="eventAddressBtn" class="picker-btn" type="button"></button>
+        <label for="eventNotes" class="field-label">Notes <span class="optional">(facultatif)</span></label>
+        <textarea id="eventNotes" class="text-area md-input" placeholder="N° de réservation, quai, voiture, places, horaires… (mise en forme possible)"></textarea>
+        <span class="field-label">Billets et pièces jointes</span>
+        <input id="eventFiles" type="file" multiple hidden>
+        <div id="eventAttachments" class="attachments"></div>
+        <div class="button-pair">
+          <button id="addEventFilesBtn" class="secondary-btn" type="button">📎 Joindre des fichiers</button>
+          <button id="eventFromDocsBtn" class="secondary-btn" type="button">📂 Depuis Documents</button>
+        </div>
+        <button id="eventDeleteBtn" class="secondary-btn block danger-text" type="button" hidden>🗑️ Supprimer cette étape</button>
+      </section>
+
       <!-- DÉPENSES : totaux (voyage, aujourd'hui, par catégorie), puis les achats jour par jour -->
       <section id="view-expenses" class="view" hidden>
         <div id="expensesSummary"></div>
@@ -206,6 +251,7 @@
       <!-- NOTES : dossiers et notes (ou contenu d'un dossier) -->
       <section id="view-notes" class="view" hidden>
         <input id="notesSearch" class="search-input" type="search" placeholder="Rechercher dans les notes" autocomplete="off" aria-label="Rechercher dans les notes">
+        <div id="notesShared"></div>
         <div id="notesContent" class="list"></div>
         <p id="notesEmpty" class="empty" hidden></p>
       </section>
@@ -250,6 +296,7 @@
       <!-- CARNET D'ADRESSES -->
       <section id="view-addresses" class="view" hidden>
         <input id="addressSearch" class="search-input" type="search" placeholder="Rechercher un lieu" autocomplete="off" aria-label="Rechercher un lieu">
+        <div id="addressShared"></div>
         <div id="addressFilters" class="chip-row"></div>
         <div id="addressList" class="list"></div>
         <p id="addressesEmpty" class="empty" hidden></p>
@@ -311,6 +358,7 @@
       <section id="view-documents" class="view" hidden>
         <input id="docFiles" type="file" multiple hidden>
         <input id="docsSearch" class="search-input" type="search" placeholder="Rechercher un document" autocomplete="off" aria-label="Rechercher un document">
+        <div id="docsShared"></div>
         <div id="docsContent" class="list"></div>
         <p id="docsEmpty" class="empty" hidden></p>
       </section>
@@ -369,6 +417,16 @@
         <p id="sharedAlbumInfo" class="hint" hidden></p>
         <div id="sharedPhotoGrid"></div>
         <p id="sharedAlbumEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- CE QU'UN PROCHE ME PARTAGE (lecture seule) : son carnet d'adresses, ses notes, ses documents -->
+      <section id="view-shared-items" class="view" hidden>
+        <div id="sharedItemsContent"></div>
+      </section>
+
+      <!-- UNE ADRESSE OU UNE NOTE D'UN PROCHE (lecture seule) -->
+      <section id="view-shared-item" class="view" hidden>
+        <div id="sharedItemDetail"></div>
       </section>
 
       <!-- UNE PHOTO : DESCRIPTION ET COMMENTAIRES -->
@@ -522,6 +580,7 @@
 <script src="js/weather.js"></script>
 <script src="js/notes.js"></script>
 <script src="js/addresses.js"></script>
+<script src="js/schedule.js"></script>
 <script src="js/phrases.js"></script>
 <script src="js/gallery.js"></script>
 <script src="js/documents.js"></script>
@@ -531,6 +590,7 @@
 <script src="js/cloud.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/sharing.js"></script>
+<script src="js/shared-items.js"></script>
 <script src="js/comments.js"></script>
 <script src="js/app.js"></script>
 </body>

@@ -13,7 +13,15 @@
    « sharedPhotos » (ce que les proches partagent, gardé pour le hors connexion). Rien de tout ça
    n'entre dans les sauvegardes. */
 var CLOUD = window.SOHRI_CLOUD || null;
-var CLOUD_CATEGORIES = { albums: { icon: '🖼️', label: 'Images' } };
+// Rubriques que je peux montrer à un proche. items : en lecture, élément par élément, depuis mes
+// rubriques synchronisées (sync.js) ; les Images ont leur propre partage.
+var CLOUD_CATEGORIES = {
+  albums: { icon: '🖼️', label: 'Images' },
+  schedule: { icon: '📅', label: 'Programme', items: true },
+  addresses: { icon: '📍', label: 'Carnet d\'adresses', items: true },
+  notes: { icon: '📝', label: 'Notes', items: true },
+  documents: { icon: '📂', label: 'Documents', items: true }
+};
 var SHARE_PHOTO_SIZE = 1600;       // photos envoyées : réduites (1 Go gratuit pour tout le monde)
 var SHARE_PHOTO_QUALITY = 0.8;
 var SHARE_THUMB_MAX = 180 * 1024;
@@ -479,11 +487,13 @@ function clearCloudData() {
   cloudState.grantsToMe = [];
   cloudState.familyUsage = [];
   return dbGetAll('cloud').then(function (rows) {
-    return dbWrite(['cloud', 'sharedAlbums', 'sharedPhotos', 'sharedComments'], function (tx) {
+    return dbWrite(['cloud', 'sharedAlbums', 'sharedPhotos', 'sharedComments', 'sharedItems', 'sharedFiles'], function (tx) {
       rows.forEach(function (row) { if (row.key !== 'device') tx.objectStore('cloud')['delete'](row.key); });
       tx.objectStore('sharedAlbums').clear();
       tx.objectStore('sharedPhotos').clear();
       tx.objectStore('sharedComments').clear();
+      tx.objectStore('sharedItems').clear();
+      tx.objectStore('sharedFiles').clear();
     });
   });
 }
@@ -657,6 +667,35 @@ function cloudSetShare(category, to, enabled) {
   });
 }
 
+/* Mes rubriques ne sont plus en ligne (synchronisation arrêtée) : mes proches ne voient plus que
+   mes Images, si je les leur partage. */
+function removeItemShares() {
+  var writes = [];
+  var grants = {};
+  Object.keys(cloudState.myGrants).forEach(function (to) {
+    var keep = cloudState.myGrants[to].filter(function (c) { return !(CLOUD_CATEGORIES[c] && CLOUD_CATEGORIES[c].items); });
+    if (keep.length === cloudState.myGrants[to].length) return;
+    var path = 'grants/' + cloudSession.uid + '_' + to;
+    writes.push(keep.length
+      ? fsSet(path, { owner: cloudSession.uid, to: to, ownerName: cloudState.profile.name, categories: keep }, { time: ['updatedAt'] })
+      : fsDelete(path));
+    grants[to] = keep;
+  });
+  if (!writes.length) return Promise.resolve();
+  return fsCommit(writes).then(function () {
+    Object.keys(grants).forEach(function (to) {
+      if (grants[to].length) cloudState.myGrants[to] = grants[to];
+      else delete cloudState.myGrants[to];
+    });
+    return cloudPut('myGrants', cloudState.myGrants);
+  });
+}
+
+/* Une de mes rubriques (hors Images) est-elle partagée ? */
+function sharesItemCategories() {
+  return Object.keys(CLOUD_CATEGORIES).some(function (c) { return CLOUD_CATEGORIES[c].items && sharedWith(c).length > 0; });
+}
+
 function deleteOwnComments() {
   var me = userPath();
   return fsListAll(me, 'comments', true).then(function (docs) {
@@ -716,6 +755,7 @@ function syncNow() {
     })
     .then(sendPendingComments)
     .then(receiveShares)
+    .then(receiveSharedItems)
     .then(syncComments)
     .then(downloadOwnPhotos)
     .then(downloadSharedPhotos)
@@ -921,8 +961,11 @@ function pullOwnChanges() {
    changé qu'en ligne est repris ici, ce qui a changé ici repartira (publishChanges). */
 function applyAccountChanges(albumDocs, photoDocs, merging) {
   var gone = [];
+  var needed = {}; // albums des photos qui arrivent ici (nouvelles, ou revenues)
   return applyAccountAlbums(albumDocs, merging, gone).then(function () {
-    return applyAccountPhotos(photoDocs, merging);
+    return applyAccountPhotos(photoDocs, merging, needed);
+  }).then(function () {
+    return merging ? null : reviveDeletedAlbums(albumDocs, needed);
   }).then(function () {
     return removeGoneAlbums(gone);
   }).then(function () {
@@ -943,13 +986,16 @@ function applyAccountAlbums(docs, merging, gone) {
       var album = byRid[doc._id];
       var done = pub[doc._id];
       if (doc.deleted) {
-        if (album) gone.push(doc._id);
         records['pub:' + doc._id] = null;
+        // Supprimé ailleurs, mais renommé ici entre-temps : gardé (il repartira). Sinon retiré
+        // ici aussi, s'il est vide (voir removeGoneAlbums).
+        if (album && done && !merging && (albumName(album) !== done.name || albumIconText(album) !== done.icon)) return;
+        if (album) gone.push(doc._id);
         return;
       }
       var remote = { kind: 'album', rid: doc._id, name: doc.name || 'Album', icon: doc.icon || '', time: doc._updateTime || null };
       if (!album) {
-        if (done && !merging) return; // supprimé ici : la suppression partira
+        if (done && !merging) return; // supprimé ici : voir reviveDeletedAlbums
         album = { kind: 'photos', name: remote.name, createdAt: Date.now(), rid: doc._id, fromAccount: uid };
         if (remote.icon) album.icon = remote.icon;
         byRid[doc._id] = album;
@@ -970,7 +1016,7 @@ function applyAccountAlbums(docs, merging, gone) {
   });
 }
 
-function applyAccountPhotos(docs, merging) {
+function applyAccountPhotos(docs, merging, needed) {
   if (!docs.length) return Promise.resolve();
   var uid = cloudSession.uid;
   return Promise.all([dbGetAll('folders'), dbGetAll('photos'), loadPublished()]).then(function (r) {
@@ -992,18 +1038,33 @@ function applyAccountPhotos(docs, merging) {
       var photo = photoByRid[rid];
       var done = pub[rid];
       if (doc.deleted) {
-        if (photo) removed.push(photo.id);
         records['pub:' + rid] = null;
         records['pend:' + rid] = null;
+        // Supprimée ailleurs, mais modifiée ici entre-temps : gardée (elle repartira, comme une
+        // nouvelle). Sinon retirée ici aussi.
+        var editedHere = photo && done && !merging && (photoCaption(photo) !== (done.caption || '') ||
+          photoLocation(photo) !== (done.location || '') || ridOfAlbum[photo.albumId] !== done.album);
+        if (photo && !editedHere) removed.push(photo.id);
         return;
       }
       var remote = { kind: 'photo', rid: rid, album: doc.album, parts: doc.parts, caption: doc.caption || '', location: doc.location || '', time: doc._updateTime || null };
       if (!photo) {
-        if (done && !merging) return; // supprimée ici : la suppression partira
-        records['pend:' + rid] = {
-          rid: rid, album: doc.album, takenAt: doc.takenAt, width: doc.width, height: doc.height,
-          parts: doc.parts, size: doc.size, caption: remote.caption, location: remote.location
+        var arrive = function () {
+          records['pend:' + rid] = {
+            rid: rid, album: doc.album, takenAt: doc.takenAt, width: doc.width, height: doc.height,
+            parts: doc.parts, size: doc.size, caption: remote.caption, location: remote.location
+          };
+          needed[doc.album] = true;
         };
+        if (!done || merging) return arrive();
+        // Supprimée ici. Modifiée ailleurs depuis le dernier échange : elle revient (sa suppression
+        // ne part pas). Sinon la suppression partira, à la version en ligne.
+        if (remote.caption !== (done.caption || '') || remote.location !== (done.location || '') || remote.album !== done.album) {
+          records['pub:' + rid] = null;
+          arrive();
+        } else if (remote.time && remote.time !== done.time) {
+          records['pub:' + rid] = Object.assign({}, done, { time: remote.time });
+        }
         return;
       }
       records['pub:' + rid] = remote;
@@ -1026,6 +1087,41 @@ function applyAccountPhotos(docs, merging) {
         putSyncRecords(tx, records);
       }, { remote: true });
     });
+  });
+}
+
+/* Albums supprimés ici, encore en ligne : ils reviennent s'ils ont été renommés ailleurs
+   entre-temps, ou si une photo y arrive (ajoutée ailleurs, ou modifiée ailleurs : voir
+   applyAccountPhotos). Sinon leur suppression partira, à la version en ligne. */
+function reviveDeletedAlbums(albumDocs, needed) {
+  var uid = cloudSession.uid;
+  return Promise.all([dbGetAll('folders'), loadPublished()]).then(function (r) {
+    var here = {};
+    r[0].filter(isAlbum).forEach(function (a) { here[albumRemoteId(a)] = true; });
+    var pub = r[1];
+    var remoteOf = {};
+    albumDocs.forEach(function (doc) { if (!doc.deleted) remoteOf[doc._id] = doc; });
+    var revived = [];
+    var records = {};
+    Object.keys(pub).forEach(function (rid) {
+      var done = pub[rid];
+      if (done.kind !== 'album' || here[rid]) return;
+      var doc = remoteOf[rid];
+      var remote = doc ? { kind: 'album', rid: rid, name: doc.name || 'Album', icon: doc.icon || '', time: doc._updateTime || null } : null;
+      if ((remote && (remote.name !== done.name || remote.icon !== done.icon)) || needed[rid]) {
+        var album = { kind: 'photos', name: (remote || done).name, createdAt: Date.now(), rid: rid, fromAccount: uid };
+        if ((remote || done).icon) album.icon = (remote || done).icon;
+        revived.push(album);
+        records['pub:' + rid] = remote || done;
+      } else if (remote && remote.time && remote.time !== done.time) {
+        records['pub:' + rid] = Object.assign({}, done, { time: remote.time });
+      }
+    });
+    if (!revived.length && !Object.keys(records).length) return null;
+    return dbWrite(['folders', 'cloud'], function (tx) {
+      revived.forEach(function (album) { tx.objectStore('folders').put(album); });
+      putSyncRecords(tx, records);
+    }, { remote: true });
   });
 }
 
@@ -1144,10 +1240,11 @@ function photoLocation(photo) {
 }
 
 /* Écritures conditionnelles (comme pour les rubriques, sync.js) : un album ou une photo n'est
-   modifié en ligne que s'il n'y a pas changé depuis le dernier échange (version « time ») ; sinon
-   l'envoi est refusé, et la synchronisation refaite aussitôt : les changements faits ailleurs sont
-   repris d'abord (champ par champ), puis les nôtres repartent. Les suppressions, elles, passent
-   toujours. Échanges des versions précédentes, sans version notée : envoi sans condition. */
+   modifié ou supprimé en ligne que s'il n'y a pas changé depuis le dernier échange (version
+   « time ») ; sinon l'envoi est refusé, et la synchronisation refaite aussitôt : les changements
+   faits ailleurs sont repris d'abord (champ par champ), puis les nôtres repartent. Supprimé ici
+   mais modifié ailleurs entre-temps : il revient (rien ne se perd). Échanges des versions
+   précédentes, sans version notée : envoi sans condition. */
 var imageConflictRounds = 0;
 
 function imageVersion(done) {
@@ -1161,6 +1258,34 @@ function conditionalWrite(write, version) {
 function lastWriteTime(response) {
   var results = (response && response.writeResults) || [];
   return (results[results.length - 1] || {}).updateTime || null;
+}
+
+/* Nouveau en ligne (album, photo : la dernière écriture) : refusé si un autre appareil l'a créé
+   entre-temps. À la place d'une trace de suppression (gardé ici, ou revenu), il est recréé, si la
+   trace n'a pas changé entre-temps. */
+function commitNew(writes, path) {
+  return fsCommit(writes).then(null, function (err) {
+    if (!isWriteConflict(err)) throw err;
+    return fsGet(path).then(function (doc) {
+      if (!doc || !doc.deleted || !doc._updateTime) throw err;
+      writes[writes.length - 1].currentDocument = { updateTime: doc._updateTime };
+      return fsCommit(writes);
+    });
+  });
+}
+
+/* Photo ajoutée à un album (ou déplacée dedans) : l'album est « touché » dans la même écriture.
+   Un appareil qui le supprimerait sans l'avoir vue voit sa suppression refusée. */
+function touchAlbum(albumRid) {
+  return conditionalWrite(fsSet(userPath() + '/albums/' + albumRid, {}, { mask: [], time: ['updatedAt'] }), { exists: true });
+}
+/* Nouvelle version de l'album touché (avant-dernière écriture) : notée, pour que cet appareil ne
+   se refuse pas à lui-même son prochain renommage. */
+function noteAlbumTouched(albumDone, response) {
+  var results = (response && response.writeResults) || [];
+  if (!albumDone || results.length < 2 || !results[results.length - 2].updateTime) return Promise.resolve();
+  albumDone.time = results[results.length - 2].updateTime;
+  return savePublished(albumDone);
 }
 
 function publishChanges(albums, photos, published) {
@@ -1180,9 +1305,11 @@ function publishChanges(albums, photos, published) {
     var done = published[rid];
     if (!done || done.name !== name || done.icon !== icon) {
       tasks.push(function () {
-        var write = conditionalWrite(fsSet(me + '/albums/' + rid, { name: name, icon: icon }, { time: ['updatedAt'] }), imageVersion(done));
-        return fsCommit([write]).then(function (response) {
-          return savePublished({ kind: 'album', rid: rid, name: name, icon: icon, time: lastWriteTime(response) });
+        var path = me + '/albums/' + rid;
+        var write = conditionalWrite(fsSet(path, { name: name, icon: icon }, { time: ['updatedAt'] }), imageVersion(done));
+        return (done ? fsCommit([write]) : commitNew([write], path)).then(function (response) {
+          published[rid] = { kind: 'album', rid: rid, name: name, icon: icon, time: lastWriteTime(response) };
+          return savePublished(published[rid]);
         }).then(null, refused);
       });
     }
@@ -1204,13 +1331,17 @@ function publishChanges(albums, photos, published) {
         var fields = { album: album };
         if (caption) fields.caption = caption;
         if (location) fields.location = location;
-        var write = conditionalWrite(fsSet(me + '/photos/' + rid, fields, { mask: ['album', 'caption', 'location'], time: ['updatedAt'] }), imageVersion(done));
-        return fsCommit([write]).then(function (response) {
-          done.album = album;
-          done.caption = caption;
-          done.location = location;
-          done.time = lastWriteTime(response) || done.time;
-          return savePublished(done);
+        var moved = done.album !== album;
+        var writes = moved ? [touchAlbum(album)] : [];
+        writes.push(conditionalWrite(fsSet(me + '/photos/' + rid, fields, { mask: ['album', 'caption', 'location'], time: ['updatedAt'] }), imageVersion(done)));
+        return fsCommit(writes).then(function (response) {
+          return (moved ? noteAlbumTouched(published[album], response) : Promise.resolve()).then(function () {
+            done.album = album;
+            done.caption = caption;
+            done.location = location;
+            done.time = lastWriteTime(response) || done.time;
+            return savePublished(done);
+          });
         }).then(null, refused);
       });
     }
@@ -1222,7 +1353,7 @@ function publishChanges(albums, photos, published) {
   uploads.forEach(function (item, i) {
     tasks.push(function () {
       setCloudStatus('syncing', { progress: { label: 'Envoi des photos partagées', done: i, total: uploads.length } });
-      return uploadPhoto(item.photo, item.rid, item.album).then(null, function (err) {
+      return uploadPhoto(item.photo, item.rid, item.album, published[item.album]).then(null, function (err) {
         if (err.cloud === 'offline' || err.cloud === 'signed-out') throw err;
         if (isWriteConflict(err)) return refused(err); // déjà en ligne (envoyée par un autre appareil)
         console.warn('Photo pas encore envoyée', item.rid, err);
@@ -1232,19 +1363,20 @@ function publishChanges(albums, photos, published) {
     });
   });
   // Photos, puis albums supprimés : une trace datée prévient les proches ; les commentaires de la
-  // photo sont effacés avec elle.
+  // photo sont effacés avec elle. Refusée si la photo (l'album) a changé ailleurs entre-temps.
+  var lastVersion = function (done) { return done.time ? { updateTime: done.time } : null; };
   Object.keys(published).forEach(function (rid) {
     var done = published[rid];
     if (done.kind === 'photo' && !wanted[rid]) {
       tasks.push(function () {
         return fsQuery(me, { from: [{ collectionId: 'comments' }], where: fieldEquals('photo', rid), select: { fields: [{ fieldPath: 'photo' }] } }).then(function (comments) {
-          var writes = [fsSet(me + '/photos/' + rid, { deleted: true }, { time: ['updatedAt'] })];
+          var writes = [conditionalWrite(fsSet(me + '/photos/' + rid, { deleted: true }, { time: ['updatedAt'] }), lastVersion(done))];
           for (var i = 0; i < (done.parts || 1); i++) writes.push(fsDelete(me + '/photoParts/' + rid + '-' + i));
           comments.forEach(function (c) { writes.push(fsDelete(me + '/comments/' + c._id)); });
-          return fsCommit(writes);
-        }).then(function () {
-          return dbWrite(['sharedComments'], function (tx) { deleteCommentsOfPhoto(tx, cloudSession.uid + '/' + rid); });
-        }).then(function () { return forgetPublished(rid); });
+          return fsCommit(writes).then(function () {
+            return dbWrite(['sharedComments'], function (tx) { deleteCommentsOfPhoto(tx, cloudSession.uid + '/' + rid); });
+          }).then(function () { return forgetPublished(rid); });
+        }).then(null, refused);
       });
     }
   });
@@ -1253,7 +1385,8 @@ function publishChanges(albums, photos, published) {
   Object.keys(published).forEach(function (rid) {
     if (published[rid].kind === 'album' && !liveAlbums[rid]) {
       tasks.push(function () {
-        return fsCommit([fsSet(me + '/albums/' + rid, { deleted: true }, { time: ['updatedAt'] })]).then(function () { return forgetPublished(rid); });
+        var write = conditionalWrite(fsSet(me + '/albums/' + rid, { deleted: true }, { time: ['updatedAt'] }), lastVersion(published[rid]));
+        return fsCommit([write]).then(function () { return forgetPublished(rid); }).then(null, refused);
       });
     }
   });
@@ -1264,8 +1397,9 @@ function publishChanges(albums, photos, published) {
   });
 }
 
-/* Une photo : réduite (1600 px), en morceaux de moins de 1 Mo, avec sa miniature. */
-function uploadPhoto(photo, rid, album) {
+/* Une photo : réduite (1600 px), en morceaux de moins de 1 Mo, avec sa miniature. albumDone :
+   dernier échange de son album (sa version change : voir touchAlbum). */
+function uploadPhoto(photo, rid, album, albumDone) {
   var me = userPath();
   return loadImage(photo.blob).then(function (img) {
     return drawJpeg(img, SHARE_PHOTO_SIZE, SHARE_PHOTO_QUALITY);
@@ -1287,9 +1421,13 @@ function uploadPhoto(photo, rid, album) {
       if (caption) meta.caption = caption;
       if (location) meta.location = location;
       // Nouvelle en ligne : refusée (avec ses morceaux) si un autre appareil l'a envoyée entre-temps.
-      writes.push(conditionalWrite(fsSet(me + '/photos/' + rid, meta, { time: ['updatedAt'] }), { exists: false }));
-      return fsCommit(writes).then(function (response) {
-        return savePublished({ kind: 'photo', rid: rid, album: album, parts: parts, caption: caption, location: location, time: lastWriteTime(response) });
+      var path = me + '/photos/' + rid;
+      writes.push(touchAlbum(album));
+      writes.push(conditionalWrite(fsSet(path, meta, { time: ['updatedAt'] }), { exists: false }));
+      return commitNew(writes, path).then(function (response) {
+        return noteAlbumTouched(albumDone, response).then(function () {
+          return savePublished({ kind: 'photo', rid: rid, album: album, parts: parts, caption: caption, location: location, time: lastWriteTime(response) });
+        });
       });
     });
   });
@@ -1808,7 +1946,7 @@ onDbChange(function (stores, remote) {
   if (remote || !cloudSession) return; // changement reçu d'un autre appareil : déjà en ligne
   var touches = function (names) { return names.some(function (name) { return stores.indexOf(name) >= 0; }); };
   if ((ownImagesOnline() && touches(['folders', 'photos'])) ||
-    (syncAllEnabled() && touches(['notes', 'addresses', 'folders', 'documents', 'documentFiles', 'expenses']))) schedulePublish();
+    (syncAllEnabled() && touches(['notes', 'addresses', 'folders', 'documents', 'documentFiles', 'expenses', 'schedule']))) schedulePublish();
 });
 window.addEventListener('online', function () { if (cloudSession) syncNow(); });
 document.addEventListener('visibilitychange', function () {

@@ -1,9 +1,9 @@
 /* ---------- Base de données locale (IndexedDB) ---------- */
 var DB_NAME = 'travelAppDB';
-var DB_VERSION = 5;
+var DB_VERSION = 6;
 // Magasins des données de l'utilisateur (ceux des sauvegardes). Le partage (cloud.js) a les siens :
 // « cloud », « sharedAlbums », « sharedPhotos », « sharedComments », jamais sauvegardés.
-var DB_STORES = ['notes', 'addresses', 'settings', 'folders', 'photos', 'documents', 'documentFiles'];
+var DB_STORES = ['notes', 'addresses', 'settings', 'folders', 'photos', 'documents', 'documentFiles', 'expenses'];
 
 function openDB() {
   return new Promise(function (resolve, reject) {
@@ -52,6 +52,10 @@ function openDB() {
         comments.createIndex('owner', 'owner');
         comments.createIndex('photoKey', 'photoKey');
       }
+      // Version 6 : dépenses du voyage.
+      if (!db.objectStoreNames.contains('expenses')) {
+        db.createObjectStore('expenses', { keyPath: 'id', autoIncrement: true });
+      }
     };
     req.onsuccess = function (e) {
       var db = e.target.result;
@@ -98,6 +102,16 @@ function dbGetAllByIndex(storeName, indexName, value) {
       var tx = db.transaction(storeName, 'readonly');
       var req = tx.objectStore(storeName).index(indexName).getAll(value);
       req.onsuccess = function () { resolve(req.result || []); };
+      req.onerror = function () { reject(req.error); };
+    });
+  });
+}
+function dbCount(storeName) {
+  return dbPromise.then(function (db) {
+    return new Promise(function (resolve, reject) {
+      if (!db) return resolve(0);
+      var req = db.transaction(storeName, 'readonly').objectStore(storeName).count();
+      req.onsuccess = function () { resolve(req.result || 0); };
       req.onerror = function () { reject(req.error); };
     });
   });

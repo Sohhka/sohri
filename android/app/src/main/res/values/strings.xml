@@ -6,7 +6,4 @@
     <string name="no_file_picker">Impossible d\'ouvrir le sélecteur de fichiers.</string>
     <string name="file_saved">Fichier enregistré.</string>
     <string name="file_save_failed">L\'enregistrement du fichier a échoué.</string>
-    <string name="gallery_saved">Photo enregistrée dans la galerie (album SOHRI).</string>
-    <string name="gallery_save_failed">La photo n\'a pas pu être enregistrée dans la galerie.</string>
-    <string name="gallery_permission_denied">Autorisation refusée : la photo n\'a pas été enregistrée.</string>
 </resources>

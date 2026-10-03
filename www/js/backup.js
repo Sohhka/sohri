@@ -273,16 +273,27 @@ function createBackup() {
   }).then(function (zip) {
     if (!window.AndroidBridge) {
       progress.close(); // la suite se passe dans la feuille de partage (iPhone) ou le téléchargement
-      return saveFile(zip, backupFileName());
+      return saveFile(zip, backupFileName()).then(function (done) {
+        if (done !== false) noteBackupSaved();
+      });
     }
     progress.update('Enregistrement de la sauvegarde… (' + formatSize(zip.size) + ')', 0.5);
-    return saveFile(zip, backupFileName(), function (fraction) { progress.update(null, 0.5 + fraction / 2); });
+    return saveFile(zip, backupFileName(), function (fraction) { progress.update(null, 0.5 + fraction / 2); }).then(function (id) {
+      // Notée quand le fichier est vraiment enregistré (emplacement choisi, copie faite).
+      whenAndroidSaved(id).then(function (saved) { if (saved) noteBackupSaved(); });
+    });
   }).then(function () {
     progress.close();
   }, function (err) {
     progress.close();
     throw err;
   });
+}
+
+/* Rappel de sauvegarde (settings.js) : date de la dernière, sur ce téléphone. */
+function noteBackupSaved() {
+  writePref(LAST_BACKUP_PREF, Date.now());
+  if (currentViewName() === 'settings') renderSettings();
 }
 
 /* « sohri.json » : à la racine du zip, ou dans un dossier (zip refait par l'iPhone). */
@@ -335,7 +346,8 @@ function backupSummary(data) {
     plural((data.addresses || []).length, 'adresse', 'adresses'),
     plural(albums, 'album', 'albums'),
     plural((data.photos || []).length, 'photo', 'photos'),
-    plural((data.documents || []).length, 'document', 'documents')
+    plural((data.documents || []).length, 'document', 'documents'),
+    plural((data.expenses || []).length, 'dépense', 'dépenses')
   ].join(', ');
 }
 

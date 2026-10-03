@@ -1,7 +1,7 @@
 {
   "name": "SOHRI",
   "short_name": "SOHRI",
-  "description": "Voyage au Japon : convertisseur, notes, adresses, images et documents, même sans connexion.",
+  "description": "Voyage au Japon : convertisseur, dépenses, météo, notes, adresses, phrases utiles, images et documents, même sans connexion.",
   "lang": "fr",
   "dir": "ltr",
   "start_url": "./",

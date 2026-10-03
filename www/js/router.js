@@ -37,14 +37,15 @@ function renderTopActions() {
   var container = byId('topActions');
   container.innerHTML = '';
   (def.actions ? def.actions(entry.params) : []).forEach(function (action) {
-    container.appendChild(h('button', {
+    var button = container.appendChild(h('button', {
       type: 'button',
       className: action.text ? 'top-text-btn' : 'icon-btn',
       'aria-label': action.label,
       title: action.label,
-      text: action.text || action.icon,
+      text: action.svg ? '' : action.text || action.icon,
       onclick: action.onClick
     }));
+    if (action.svg) button.innerHTML = action.svg; // icône dessinée : la même sur tous les téléphones
   });
 }
 

@@ -79,6 +79,11 @@ service cloud.firestore {
 
       // syncAll : toutes mes rubriques synchronisées entre mes appareils (réglage du compte).
       function validSyncAll(data) { return !('syncAll' in data) || data.syncAll is bool; }
+      // usageBytes, usageAt : espace occupé en ligne par ce compte (mesuré par ses appareils).
+      function validUsage(data) {
+        return (!('usageBytes' in data) || (data.usageBytes is int && data.usageBytes >= 0))
+          && (!('usageAt' in data) || data.usageAt is timestamp);
+      }
 
       allow get: if isMember();
       allow list: if isMember() && resource.data.invitedBy == me(); // proches inscrits avec mon code
@@ -91,9 +96,9 @@ service cloud.firestore {
         && existsAfter(codeDoc(request.resource.data.code))
         && (invited(request.resource.data) || founder(request.resource.data));
       allow update: if signedIn() && uid == me()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'sources', 'syncAll'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'sources', 'syncAll', 'usageBytes', 'usageAt'])
         && validText(request.resource.data.name, 40) && validSources(request.resource.data)
-        && validSyncAll(request.resource.data);
+        && validSyncAll(request.resource.data) && validUsage(request.resource.data);
       allow delete: if signedIn() && uid == me();
 
       // Contacts : visibles de leur seul propriétaire.
@@ -158,15 +163,15 @@ service cloud.firestore {
         allow delete: if signedIn() && uid == me();
       }
 
-      // Toutes mes rubriques entre mes appareils (réglage syncAll) : notes, adresses, dossiers et
-      // documents (items : description en JSON, et empreintes de leurs fichiers), leurs fichiers
+      // Toutes mes rubriques entre mes appareils (réglage syncAll) : notes, adresses, dossiers,
+      // documents et dépenses (items : description en JSON, et empreintes de leurs fichiers), leurs fichiers
       // (blobs : un par contenu, nommé par son empreinte SHA-256) et leurs morceaux (blobParts).
       // Visibles de leur seul propriétaire : jamais des proches, même de ceux qui voient ses Images.
       match /items/{itemId} {
         allow read, delete: if signedIn() && uid == me();
         allow create, update: if writesOwn(uid) && itemId.size() <= 80 && (tombstone(request.resource.data) || (
           onlyKeys(request.resource.data, ['kind', 'data', 'blobs', 'updatedAt'])
-          && request.resource.data.kind in ['note', 'address', 'folder', 'document']
+          && request.resource.data.kind in ['note', 'address', 'folder', 'document', 'expense']
           && request.resource.data.data is string && request.resource.data.data.size() <= 900000
           && request.resource.data.blobs is list && request.resource.data.blobs.size() <= 500
           && request.resource.data.updatedAt == request.time));

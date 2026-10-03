@@ -8,6 +8,8 @@
   --accent-soft: rgba(200,64,44,0.09);
   --divider: rgba(27,33,64,0.16);
   --danger: #B3261E;
+  --ok: #2E8B57;
+  --warn: #C77700;
   --code-bg: rgba(27,33,64,0.06);
   --shadow: 0 1px 2px rgba(27,33,64,0.06), 0 6px 20px rgba(27,33,64,0.08);
   --pdf-bg: #DDD8CC;
@@ -30,6 +32,8 @@
     --accent-soft: rgba(227,92,61,0.16);
     --divider: rgba(242,239,233,0.16);
     --danger: #FF6B60;
+    --ok: #5CC98A;
+    --warn: #F2B544;
     --code-bg: rgba(242,239,233,0.08);
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
     --pdf-bg: #0B0F1E;
@@ -39,7 +43,7 @@
 :root[data-theme="dark"] {
   --bg: #12172B; --surface: #1B2140; --text: #F2EFE9; --text-muted: #8A90B3;
   --accent: #E35C3D; --accent-soft: rgba(227,92,61,0.16); --divider: rgba(242,239,233,0.16);
-  --danger: #FF6B60; --code-bg: rgba(242,239,233,0.08);
+  --danger: #FF6B60; --ok: #5CC98A; --warn: #F2B544; --code-bg: rgba(242,239,233,0.08);
   --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
   --pdf-bg: #0B0F1E;
   color-scheme: dark;
@@ -178,6 +182,23 @@ main {
   font-weight: 800; font-variant-numeric: tabular-nums;
   font-size: clamp(2.1rem, 11vw, 3.1rem); color: var(--accent);
 }
+/* ＋ (additionner des prix), ⇅ (inverser le sens), 🧾＋ (noter comme dépense) */
+.sum-add-btn, .swap-btn {
+  flex: 0 0 auto; align-self: center; border: none; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-weight: 800; line-height: 1;
+}
+.sum-add-btn { width: 40px; height: 40px; font-size: 1.35rem; }
+.swap-btn { width: 30px; height: 30px; font-size: 1rem; }
+.expense-btn {
+  flex: 0 0 auto; align-self: center; margin-left: auto; padding: 7px 11px; border: none; border-radius: 100px;
+  background: var(--accent-soft); color: var(--accent); font-size: 0.95rem; font-weight: 800;
+}
+.sum-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.sum-chip {
+  padding: 5px 10px; border: 1px solid var(--divider); border-radius: 100px; background: var(--surface);
+  color: var(--text); font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.sum-clear { padding: 4px 6px; font-size: 0.85rem; }
 .rate-block { position: relative; margin: 6px 0 4px; display: flex; justify-content: center; }
 /* Trait pointillé d'un bord de l'écran à l'autre (le bloc est centré : 50 % - la moitié de l'écran). */
 .rate-block::before {
@@ -215,6 +236,31 @@ main {
 .world-clock.is-compact .clock-zone { flex-direction: row; justify-content: center; align-items: baseline; gap: 6px; }
 .world-clock.is-compact .clock-time { font-size: 1.25rem; }
 .world-clock.is-compact .clock-day { display: none; }
+/* ---------- Dépenses ---------- */
+.expense-total { text-align: center; padding: 18px 16px; }
+.expense-total-yen { margin: 4px 0 0; font-size: clamp(1.9rem, 9vw, 2.6rem); font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); }
+.expense-total-euro { margin: 2px 0 0; font-size: 1.1rem; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.expense-today { margin: 10px 0 0; font-size: 0.9rem; }
+.expense-categories { display: flex; flex-direction: column; gap: 10px; }
+.expense-category { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; column-gap: 8px; align-items: baseline; }
+.expense-category-name { font-weight: 700; font-size: 0.92rem; }
+.expense-category-amount { font-size: 0.85rem; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.expense-bar { grid-column: 1 / -1; height: 6px; border-radius: 100px; background: var(--divider); overflow: hidden; }
+.expense-bar-fill { display: block; height: 100%; border-radius: 100px; background: var(--accent); }
+.expense-day { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 18px 4px 6px; font-size: 0.82rem; font-weight: 700; color: var(--text-muted); }
+.expense-day-total { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.expense-amounts { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; }
+.expense-amount { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.expense-amount-other { font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.expense-currency { margin-top: 0; }
+#expenseAmount {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; font-size: clamp(1.8rem, 9vw, 2.4rem);
+}
+.expense-converted { min-height: 1.2em; margin: 8px 0 0; color: var(--text-muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.danger-text { color: var(--danger); }
+#expenseDeleteBtn { margin-top: 24px; }
+
 /* ---------- Météo & heure ---------- */
 .weather-clock { margin: 0 0 20px; }
 .weather-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 4px 10px; }
@@ -229,6 +275,22 @@ main {
 .weather-now-temp { margin: 0; font-size: 1.9rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .weather-now-text { margin: 2px 0 0; font-size: 0.88rem; color: var(--text-muted); }
 .weather-now-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; }
+/* Heure par heure : une bande qui défile sur le côté */
+.weather-hours {
+  display: flex; gap: 2px; margin-bottom: 12px; padding: 10px 8px; overflow-x: auto; scroll-snap-type: x proximity;
+  border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); -webkit-overflow-scrolling: touch;
+}
+.weather-hour {
+  flex: 0 0 auto; width: 54px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 4px 0; border-radius: 12px; scroll-snap-align: start;
+}
+.weather-hour.is-now { background: var(--accent-soft); }
+.weather-hour-time { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+.weather-hour.is-now .weather-hour-time { color: var(--accent); }
+.weather-hour-icon { font-size: 1.35rem; line-height: 1.2; }
+.weather-hour-temp { font-size: 0.95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.weather-hour-rain { min-height: 1em; font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; }
+.weather-hour-rain.is-likely { color: var(--accent); font-weight: 700; }
 .weather-week { border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
 .weather-day {
   display: grid; grid-template-columns: minmax(0, 1fr) 2.2rem 4.6rem 5.6rem; align-items: center; gap: 8px;
@@ -495,6 +557,7 @@ img.is-missing { opacity: 0; }
 }
 .selection-count { flex: 1; font-weight: 700; font-size: 0.9rem; }
 .selection-bar .primary-btn, .selection-bar .ghost-btn { flex: 0 0 auto; padding: 10px 14px; }
+.icon-btn svg { display: block; margin: auto; }
 
 /* ---------- Documents ---------- */
 .doc-thumb {
@@ -575,6 +638,13 @@ img.is-missing { opacity: 0; }
 .cloud-status { min-height: 1.4em; margin: 6px 4px 0; font-size: 0.85rem; line-height: 1.4; color: var(--text-muted); }
 .link-btn { padding: 8px 2px; border: none; background: none; color: var(--accent); font-weight: 700; font-size: 0.92rem; }
 .cloud-status .link-btn { padding: 0; font-size: inherit; }
+/* Espace en ligne (Partage) */
+.usage-total { margin: 0 0 8px; font-weight: 700; font-size: 0.95rem; }
+.usage-bar { display: block; height: 8px; margin-bottom: 4px; border-radius: 100px; background: var(--divider); overflow: hidden; }
+.usage-bar-fill { display: block; height: 100%; border-radius: 100px; background: var(--ok); }
+.usage-card.is-full .usage-bar-fill { background: var(--warn); }
+.usage-warning { color: var(--warn); font-weight: 700; }
+.usage-card .link-btn { padding: 4px 0 0; }
 .toggle-row { cursor: pointer; }
 .toggle-row .list-row-title, .toggle-row .list-row-sub { display: block; }
 .toggle { flex: 0 0 auto; width: 24px; height: 24px; margin: 0 6px 0 0; accent-color: var(--accent); }
@@ -650,6 +720,15 @@ img.is-missing { opacity: 0; }
   content: ""; position: absolute; top: 7px; right: 7px; width: 10px; height: 10px;
   border: 2px solid var(--surface); border-radius: 50%; background: var(--accent);
 }
+/* Synchronisation en échec : point orange sur ☰, et état à côté de « Partage » dans le menu */
+#navBtn.has-alert:not(.is-back)::before {
+  content: ""; position: absolute; bottom: 7px; right: 7px; width: 10px; height: 10px;
+  border: 2px solid var(--surface); border-radius: 50%; background: var(--warn);
+}
+.drawer-sync { display: inline-block; margin-left: auto; min-width: 22px; text-align: center; font-size: 1rem; font-weight: 800; color: var(--text-muted); }
+.drawer-sync.is-ok { color: var(--ok); }
+.drawer-sync.is-busy { animation: sync-spin 1.1s linear infinite; }
+@keyframes sync-spin { to { transform: rotate(360deg); } }
 /* Lieu d'une photo (📍), ouvre la carte */
 .location-link {
   display: inline-flex; align-items: baseline; gap: 4px; margin: 0 0 6px; padding: 2px 0;
@@ -664,6 +743,8 @@ img.is-missing { opacity: 0; }
 /* ---------- Paramètres ---------- */
 h2.section-title { font-size: 0.78rem; }
 .hint { margin: 8px 2px; color: var(--text-muted); font-size: 0.88rem; line-height: 1.45; }
+.backup-info { margin: 10px 2px; font-size: 0.9rem; font-weight: 600; line-height: 1.4; color: var(--ok); }
+.backup-info.is-late { color: var(--warn); }
 
 /* ---------- Menu du bas (actions, listes, emojis) ---------- */
 .sheet { position: fixed; inset: 0; z-index: 45; }
@@ -786,6 +867,15 @@ h2.section-title { font-size: 0.78rem; }
 .taxi-request-fr { margin: 0 0 28px; color: #666666; font-size: 0.95rem; }
 .taxi-name { margin: 0 0 12px; color: #C8402C; font-size: clamp(1.1rem, 5vw, 1.8rem); font-weight: 700; }
 .taxi-address { margin: 0; font-size: clamp(1.8rem, 9vw, 3.6rem); font-weight: 800; line-height: 1.3; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Phrase en japonais à montrer (même fond blanc que la carte du taxi) */
+.phrase-card-ja { margin: 0 0 18px; font-size: clamp(2rem, 10vw, 3.8rem); font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.phrase-card-romaji { margin: 0 0 10px; color: #C8402C; font-size: clamp(1.1rem, 5vw, 1.6rem); font-weight: 700; }
+.phrase-card-fr { margin: 0; color: #666666; font-size: 1rem; }
+/* Liste des phrases */
+.phrase-row { width: 100%; text-align: left; border: none; background: transparent; color: inherit; font: inherit; }
+.phrase-row .list-row-title, .phrase-row .list-row-sub, .phrase-ja { display: block; }
+.phrase-ja { margin: 2px 0 2px; font-size: 1.05rem; font-weight: 600; }
+.emergency-card { margin-top: 12px; }
 
 /* ---------- Bandeau (mise à jour, installation) ----------
    Dans #app, sous le contenu (et au-dessus de la barre de mise en forme ou de sélection) : il ne
@@ -813,7 +903,7 @@ h2.section-title { font-size: 0.78rem; }
 /* ---------- Message temporaire ---------- */
 .toast {
   position: fixed; left: 50%; bottom: calc(var(--safe-bottom) + 84px); z-index: 60;
-  max-width: calc(100% - 48px); padding: 11px 18px; border-radius: 100px;
+  width: max-content; max-width: calc(100% - 48px); padding: 11px 18px; border-radius: 100px; /* (sans width : coupé à mi-écran) */
   background: var(--text); color: var(--bg); font-size: 0.9rem; font-weight: 600; text-align: center;
   box-shadow: 0 6px 20px rgba(0,0,0,0.25); transform: translateX(-50%);
   animation: toast-in 0.2s ease-out;

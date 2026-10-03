@@ -252,6 +252,7 @@ function readBase64(blob) {
   });
 }
 
+/* Promesse de l'identifiant du transfert (voir onGallerySaved). */
 function sendToAndroid(blob, name, action, onProgress) {
   var bridge = window.AndroidBridge;
   var id = bridge.fileBegin(safeFileName(name), blob.type || guessType(name));
@@ -259,7 +260,7 @@ function sendToAndroid(blob, name, action, onProgress) {
   function next() {
     if (offset >= blob.size) {
       bridge.fileFinish(id, action);
-      return Promise.resolve();
+      return Promise.resolve(id);
     }
     return readBase64(blob.slice(offset, offset + TRANSFER_CHUNK)).then(function (chunk) {
       bridge.fileAppend(id, chunk);
@@ -285,16 +286,19 @@ function shareableFile(blob, name) {
 }
 
 /* La feuille de partage ne s'ouvre qu'en réponse directe à un toucher : si la préparation du
-   fichier a été trop longue (sauvegarde volumineuse...), il faut toucher une seconde fois. */
+   fichier a été trop longue (sauvegarde volumineuse...), il faut toucher une seconde fois.
+   Promesse : true si un choix y a été fait (Enregistrer dans Fichiers...), false si elle a été fermée. */
 function shareWithSheet(file, action) {
   function share() {
-    return navigator.share({ files: [file] });
+    return navigator.share({ files: [file] }).then(function () { return true; });
   }
   return share()['catch'](function (err) {
     if (!err || err.name !== 'NotAllowedError') throw err;
-    return showDialog('« ' + file.name + ' » est prêt.', { cancelable: true, okLabel: SHARE_LABELS[action], onConfirm: share });
+    return showDialog('« ' + file.name + ' » est prêt.', { cancelable: true, okLabel: SHARE_LABELS[action], onConfirm: share })
+      .then(function (done) { return done === true; });
   })['catch'](function (err) {
     if (!err || err.name !== 'AbortError') throw err; // AbortError : feuille de partage fermée sans rien choisir
+    return false;
   });
 }
 
@@ -308,7 +312,7 @@ function browserHandOver(blob, name, action) {
   } else {
     downloadFile(blob, name);
   }
-  return Promise.resolve();
+  return Promise.resolve(true);
 }
 
 /* Téléchargement classique (dossier Téléchargements). */
@@ -321,15 +325,44 @@ function downloadFile(blob, name) {
   setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
 }
 
-/* action : 'open' (ouvrir), 'share' (partager) ou 'save' (enregistrer sous). */
+/* action : 'open' (ouvrir), 'share' (partager) ou 'save' (enregistrer sous). Promesse : dans un
+   navigateur, false si la feuille de partage a été fermée sans rien choisir ; sur Android,
+   l'identifiant du transfert (voir whenAndroidSaved). */
 function handOverFile(blob, name, action, onProgress) {
   if (!window.AndroidBridge) return browserHandOver(blob, name, action);
   var progress = !onProgress && blob.size > 4 * 1024 * 1024 ? showProgress('Préparation du fichier…') : null;
   return sendToAndroid(blob, name, action, onProgress || (progress && function (f) { progress.update(null, f); }))
-    .then(function () { if (progress) progress.close(); }, function (err) {
+    .then(function (id) {
+      if (progress) progress.close();
+      return id;
+    }, function (err) {
       if (progress) progress.close();
       throw err;
     });
+}
+
+/* « Enregistrer sous » sur Android : réponse une fois l'emplacement choisi et le fichier copié, ou
+   la fenêtre fermée (MainActivity.reportSaved). Promesse de true si le fichier est enregistré. */
+var saveWaits = {};
+var saveEarly = {};
+window.onFileSaved = function (id, ok) {
+  if (saveWaits[id]) {
+    saveWaits[id](!!ok);
+    delete saveWaits[id];
+  } else {
+    saveEarly[id] = !!ok;
+  }
+};
+
+function whenAndroidSaved(id) {
+  return new Promise(function (resolve) {
+    if (id in saveEarly) {
+      resolve(saveEarly[id]);
+      delete saveEarly[id];
+      return;
+    }
+    saveWaits[id] = resolve; // (rien si l'appli a été fermée entre-temps)
+  });
 }
 
 function openFile(blob, name) {
@@ -350,31 +383,146 @@ function saveFile(blob, name, onProgress) {
   return handOverFile(blob, name, 'save', onProgress);
 }
 
-/* ---------- Télécharger une photo dans la galerie du téléphone ----------
-   Appli Android : copiée directement dans la galerie (album « SOHRI »). iPhone : une appli web ne
-   peut pas écrire dans Photos ; la feuille de partage s'ouvre, et « Enregistrer l'image » l'y met
-   (expliqué la première fois). Ailleurs (ordinateur...) : fichier téléchargé. */
+/* Texte à envoyer par message (WhatsApp, SMS, e-mail...) : feuille de partage du téléphone, sinon
+   copié. Sur l'iPhone, si l'attente a été trop longue, un toucher de plus est demandé. */
+function shareText(text, title) {
+  if (window.AndroidBridge && window.AndroidBridge.shareText) {
+    window.AndroidBridge.shareText(text);
+    return Promise.resolve();
+  }
+  if (navigator.share) {
+    var share = function () { return navigator.share({ title: title, text: text }); };
+    return share()['catch'](function (err) {
+      if (!err || err.name !== 'NotAllowedError') throw err;
+      return showDialog((title || 'Le texte') + ' est prêt.', { cancelable: true, okLabel: 'Envoyer', onConfirm: share });
+    })['catch'](function (err) {
+      if (!err || err.name !== 'AbortError') throw err; // feuille de partage fermée sans rien choisir
+    });
+  }
+  return copyText(text).then(function () { showToast('Copié : colle-le dans un message.'); });
+}
+
+/* ---------- Télécharger des photos dans la galerie du téléphone ----------
+   Appli Android : copiées directement dans la galerie (album « SOHRI »), une à une, Android
+   répondant pour chacune (onGallerySaved). iPhone : une appli web ne peut pas écrire dans Photos ;
+   la feuille de partage s'ouvre, et « Enregistrer l'image » (ou « Enregistrer 12 images ») les y
+   met (expliqué la première fois). Ailleurs (ordinateur...) : fichiers téléchargés. */
 var GALLERY_HINT_PREF = 'galleryHintSeen';
+var IOS_SHARE_BATCH = 20; // photos par feuille de partage, au plus
 var DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11.5"/><path d="M7 10.5l5 5 5-5"/><path d="M5 20h14"/></svg>';
 
+/* Réponse d'Android pour une photo (MainActivity.reportGallery) : { ok, reason }. */
+var galleryWaits = {};
+var galleryEarly = {};
+window.onGallerySaved = function (id, ok, reason) {
+  var result = { ok: !!ok, reason: reason || '' };
+  if (galleryWaits[id]) {
+    galleryWaits[id](result);
+    delete galleryWaits[id];
+  } else {
+    galleryEarly[id] = result;
+  }
+};
+
+function androidGallerySave(file) {
+  return sendToAndroid(file.blob, file.name, 'gallery').then(function (id) {
+    return new Promise(function (resolve) {
+      if (galleryEarly[id]) {
+        resolve(galleryEarly[id]);
+        delete galleryEarly[id];
+        return;
+      }
+      galleryWaits[id] = resolve;
+      setTimeout(function () {
+        if (!galleryWaits[id]) return;
+        delete galleryWaits[id];
+        resolve({ ok: false, reason: 'timeout' });
+      }, 300000); // le temps de répondre à la demande d'autorisation (Android 8 et 9)
+    });
+  });
+}
+
+function galleryRefused(reason) {
+  uiAlert(reason === 'permission'
+    ? "Android n'a pas autorisé SOHRI à enregistrer des photos. Pour changer d'avis : Paramètres d'Android → Applis → SOHRI → Autorisations."
+    : "La photo n'a pas pu être enregistrée dans la galerie.");
+}
+
 function saveToGallery(blob, name) {
+  return saveManyToGallery([{ blob: blob, name: name }]);
+}
+
+/* files : [{ blob, name }]. */
+function saveManyToGallery(files) {
+  if (!files.length) return Promise.resolve();
+  var many = files.length > 1;
   var failed = function (err) {
     console.error(err);
-    uiAlert("La photo n'a pas pu être enregistrée.");
+    uiAlert(many ? "Les photos n'ont pas pu être enregistrées." : "La photo n'a pas pu être enregistrée.");
   };
-  if (window.AndroidBridge) return handOverFile(blob, name, 'gallery').then(null, failed);
-  var file = IS_IOS ? shareableFile(blob, name) : null;
-  if (file) {
-    var share = function () { return shareWithSheet(file, 'gallery'); };
-    if (readPref(GALLERY_HINT_PREF)) return share().then(null, failed);
+  if (window.AndroidBridge) {
+    var progress = many ? showProgress('Enregistrement dans la galerie…') : null;
+    var saved = 0;
+    var refused = null;
+    return files.reduce(function (chain, file, i) {
+      return chain.then(function () {
+        if (refused === 'permission') return null; // inutile d'insister
+        if (progress) progress.update('Enregistrement dans la galerie (' + (i + 1) + ' / ' + files.length + ')…', i / files.length);
+        return androidGallerySave(file).then(function (result) {
+          if (result.ok) saved++;
+          else refused = refused || result.reason;
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      if (progress) progress.close();
+      if (saved === files.length) {
+        showToast((many ? plural(saved, 'photo enregistrée', 'photos enregistrées') : 'Photo enregistrée') + ' dans la galerie (album SOHRI)');
+      } else if (saved) {
+        uiAlert(plural(saved, 'photo enregistrée', 'photos enregistrées') + ' dans la galerie sur ' + files.length + " : les autres n'ont pas pu l'être.");
+      } else {
+        galleryRefused(refused);
+      }
+    }, function (err) {
+      if (progress) progress.close();
+      failed(err);
+    });
+  }
+  var all = IS_IOS && navigator.share && navigator.canShare && typeof File === 'function'
+    ? files.map(function (f) { return new File([f.blob], safeFileName(f.name), { type: f.blob.type || guessType(f.name) }); })
+    : null;
+  if (all && navigator.canShare({ files: all.slice(0, IOS_SHARE_BATCH) })) {
+    var batches = [];
+    for (var b = 0; b < all.length; b += IOS_SHARE_BATCH) batches.push(all.slice(b, b + IOS_SHARE_BATCH));
+    // Une feuille de partage par groupe ; le suivant attend un toucher (exigé par l'iPhone).
+    var shareBatch = function (index) {
+      var again = function (text) {
+        return showDialog(text, { cancelable: true, okLabel: 'Enregistrer', onConfirm: function () { return shareBatch(index); } });
+      };
+      return navigator.share({ files: batches[index] }).then(function () {
+        if (index + 1 >= batches.length) return null;
+        var from = (index + 1) * IOS_SHARE_BATCH + 1;
+        return showDialog('Photos ' + from + ' à ' + Math.min(all.length, from + IOS_SHARE_BATCH - 1) + ' (sur ' + all.length + ') prêtes.', {
+          cancelable: true, okLabel: 'Enregistrer', onConfirm: function () { return shareBatch(index + 1); }
+        });
+      }, function (err) {
+        if (err && err.name === 'NotAllowedError') return again(many ? 'Les photos sont prêtes.' : '« ' + batches[index][0].name + ' » est prête.');
+        if (!err || err.name !== 'AbortError') throw err; // feuille fermée sans rien choisir : on s'arrête
+      });
+    };
+    var start = function () { return shareBatch(0); };
+    if (readPref(GALLERY_HINT_PREF)) return start().then(null, failed);
     writePref(GALLERY_HINT_PREF, true);
-    return showDialog("Dans le menu qui s'ouvre, touche « Enregistrer l'image » : la photo ira dans l'app Photos.", {
-      title: 'Télécharger la photo', cancelable: true, okLabel: 'Continuer', onConfirm: share
+    return showDialog(many
+      ? "Dans le menu qui s'ouvre, touche « Enregistrer " + Math.min(all.length, IOS_SHARE_BATCH) + " images » : les photos iront dans l'app Photos."
+      : "Dans le menu qui s'ouvre, touche « Enregistrer l'image » : la photo ira dans l'app Photos.", {
+      title: many ? 'Télécharger les photos' : 'Télécharger la photo', cancelable: true, okLabel: 'Continuer', onConfirm: start
     }).then(null, failed);
   }
-  downloadFile(blob, name);
-  showToast('Photo téléchargée');
+  files.forEach(function (f, i) {
+    setTimeout(function () { downloadFile(f.blob, f.name); }, i * 400); // un à un : le navigateur suit
+  });
+  showToast(many ? plural(files.length, 'photo téléchargée', 'photos téléchargées') : 'Photo téléchargée');
   return Promise.resolve();
 }
 

@@ -1,4 +1,7 @@
-/* ---------- Convertisseur Yen -> Euro ---------- */
+/* ---------- Convertisseur ¥ ⇄ € ----------
+   Dans un sens ou dans l'autre (⇅, choix gardé sur le téléphone) : yens → euros, ou euros → yens.
+   « ＋ » additionne plusieurs prix (le résultat est alors leur total), et 🧾 note le montant comme
+   dépense (voir expenses.js). */
 defineView('converter', { el: 'view-converter', section: 'converter', title: 'Convertisseur', enter: showConverter, exit: stopClock });
 
 function showConverter() {
@@ -8,15 +11,27 @@ function showConverter() {
 
 var DEFAULT_RATE = 184.5;
 var MAX_YEN_DIGITS = 12;
+var MAX_EURO_DIGITS = 9;
 var currentRate = DEFAULT_RATE;
-var rawYen = 0;
+var convertFrom = 'JPY'; // devise saisie : 'JPY' (vers les euros) ou 'EUR' (vers les yens)
+var rawAmount = 0;       // montant saisi, dans cette devise
+var sumAmounts = [];     // prix déjà additionnés (« ＋ »), dans cette devise
+try { if (localStorage.getItem('sohri.convertFrom') === 'EUR') convertFrom = 'EUR'; } catch (e) { /* stockage indisponible */ }
 
-var yenInput = document.getElementById('yenInput');
-var eurResult = document.getElementById('eurResult');
+var yenInput = document.getElementById('yenInput');   // montant saisi (en yens, ou en euros dans l'autre sens)
+var eurResult = document.getElementById('eurResult'); // résultat (en euros, ou en yens)
 
 function fmtRate(rate) { return rate.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function refreshRateText() { document.getElementById('rateText').textContent = '1 € = ' + fmtRate(currentRate) + ' ¥'; }
 function formatYen(raw) { return Number(raw).toLocaleString('fr-FR'); }
+function formatEuro(value) { return value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+/* Un montant dans sa devise : « 1 200 ¥ », « 12,50 € » (espace insécable : jamais de ¥ seul à la ligne). */
+function formatMoney(value, currency) {
+  return currency === 'EUR' ? formatEuro(value) + ' €' : formatYen(Math.round(value)) + ' ¥';
+}
+/* Conversion au taux affiché. */
+function toEuros(yen) { return yen / currentRate; }
+function toYens(euros) { return euros * currentRate; }
 
 /* Montant très long : les chiffres rétrécissent pour tenir dans la largeur de l'écran. */
 function fitToWidth(el, box) {
@@ -34,19 +49,121 @@ function fitAmounts() {
   fitToWidth(eurResult, eurResult.parentNode);
 }
 
+function totalAmount() {
+  return sumAmounts.reduce(function (sum, value) { return sum + value; }, rawAmount);
+}
+
 function updateResult() {
-  var eur = rawYen > 0 ? rawYen / currentRate : 0;
-  eurResult.textContent = eur.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var total = totalAmount();
+  eurResult.textContent = convertFrom === 'JPY'
+    ? formatEuro(total > 0 ? toEuros(total) : 0)
+    : formatYen(total > 0 ? Math.round(toYens(total)) : 0);
+  byId('resultLabel').textContent = (sumAmounts.length ? 'Total en ' : '') + (convertFrom === 'JPY' ? (sumAmounts.length ? 'euros' : 'Euro') : (sumAmounts.length ? 'yens' : 'Yen'));
+  byId('noteExpenseBtn').hidden = !(total > 0);
   fitAmounts();
 }
 
+/* Saisie : en yens, des chiffres seulement ; en euros, deux décimales au plus (virgule ou point). */
+function readAmountInput(text) {
+  if (convertFrom === 'JPY') {
+    var digits = text.replace(/[^\d]/g, '').slice(0, MAX_YEN_DIGITS);
+    var yen = digits ? parseInt(digits, 10) : 0;
+    return { value: yen, text: digits ? formatYen(yen) : '' };
+  }
+  var cleaned = text.replace(/[^\d,.]/g, '').replace('.', ',');
+  var parts = cleaned.split(',');
+  var whole = parts[0].replace(/^0+(?=\d)/, '').slice(0, MAX_EURO_DIGITS);
+  var cents = parts.length > 1 ? parts.slice(1).join('').slice(0, 2) : null;
+  var value = (whole ? parseInt(whole, 10) : 0) + (cents ? parseInt((cents + '0').slice(0, 2), 10) / 100 : 0);
+  var shown = whole ? formatYen(parseInt(whole, 10)) : cents !== null ? '0' : '';
+  return { value: value, text: shown + (cents !== null ? ',' + cents : '') };
+}
+
+function showAmount(value) {
+  rawAmount = value > 0 ? value : 0;
+  if (!rawAmount) yenInput.value = '';
+  else if (convertFrom === 'JPY') yenInput.value = formatYen(Math.round(rawAmount));
+  else yenInput.value = Number.isInteger(rawAmount) ? formatYen(rawAmount) : formatEuro(rawAmount);
+}
+
 yenInput.addEventListener('input', function () {
-  var raw = yenInput.value.replace(/[^\d]/g, '').slice(0, MAX_YEN_DIGITS);
-  rawYen = raw ? parseInt(raw, 10) : 0;
-  yenInput.value = raw ? formatYen(rawYen) : '';
+  var read = readAmountInput(yenInput.value);
+  rawAmount = read.value;
+  yenInput.value = read.text;
   updateResult();
 });
 window.addEventListener('resize', fitAmounts);
+
+/* Sens de conversion : libellés, clavier (avec ou sans virgule) et résultat. */
+function applyDirection() {
+  var yen = convertFrom === 'JPY';
+  byId('amountLabel').textContent = yen ? 'Yen' : 'Euro';
+  byId('amountSign').textContent = yen ? '¥' : '€';
+  byId('resultSign').textContent = yen ? '€' : '¥';
+  yenInput.setAttribute('inputmode', yen ? 'numeric' : 'decimal');
+  yenInput.setAttribute('aria-label', yen ? 'Montant en yens' : 'Montant en euros');
+  byId('swapBtn').setAttribute('aria-label', yen ? 'Inverser : convertir des euros en yens' : 'Inverser : convertir des yens en euros');
+  renderSumList();
+  updateResult();
+}
+
+/* ⇅ : le résultat devient le montant saisi, dans l'autre sens. */
+byId('swapBtn').addEventListener('click', function () {
+  var total = totalAmount();
+  var converted = convertFrom === 'JPY' ? Math.round(toEuros(total) * 100) / 100 : Math.round(toYens(total));
+  convertFrom = convertFrom === 'JPY' ? 'EUR' : 'JPY';
+  try { localStorage.setItem('sohri.convertFrom', convertFrom); } catch (e) { /* stockage indisponible */ }
+  sumAmounts = [];
+  showAmount(total > 0 ? converted : 0);
+  applyDirection();
+});
+
+/* ＋ : ce prix rejoint le total, et on peut taper le suivant. */
+function renderSumList() {
+  var list = byId('sumList');
+  list.innerHTML = '';
+  list.hidden = !sumAmounts.length;
+  sumAmounts.forEach(function (value, index) {
+    list.appendChild(h('button', {
+      type: 'button', className: 'sum-chip', 'aria-label': 'Retirer ' + formatMoney(value, convertFrom),
+      onclick: function () {
+        sumAmounts.splice(index, 1);
+        renderSumList();
+        updateResult();
+      }
+    }, formatMoney(value, convertFrom) + ' ×'));
+  });
+  if (sumAmounts.length) {
+    list.appendChild(h('button', {
+      type: 'button', className: 'link-btn sum-clear', text: 'Effacer',
+      onclick: function () {
+        sumAmounts = [];
+        renderSumList();
+        updateResult();
+      }
+    }));
+  }
+  if (window.fitClock) fitClock();
+}
+
+byId('sumAddBtn').addEventListener('click', function () {
+  if (!(rawAmount > 0)) {
+    showToast(sumAmounts.length ? 'Tape le prix suivant, puis ＋.' : 'Tape un prix, puis ＋ pour l\'ajouter au total.');
+    yenInput.focus();
+    return;
+  }
+  sumAmounts.push(rawAmount);
+  showAmount(0);
+  renderSumList();
+  updateResult();
+  yenInput.focus();
+});
+
+/* 🧾 : le montant (ou le total) devient une dépense. */
+byId('noteExpenseBtn').addEventListener('click', function () {
+  var total = totalAmount();
+  if (total > 0) openView('expense-edit', { amount: Math.round(total * 100) / 100, currency: convertFrom });
+});
 
 function openRateEdit() {
   document.getElementById('rateInput').value = fmtRate(currentRate);
@@ -92,7 +209,7 @@ function loadRate() {
   }).catch(function (err) { console.error(err); }).then(function () {
     refreshRateText();
     refreshRateNote();
-    updateResult();
+    applyDirection();
     refreshRate();
   });
 }

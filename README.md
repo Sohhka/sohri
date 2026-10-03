@@ -3,30 +3,45 @@
 Appli pour un voyage au Japon, sur **Android** (APK) et sur **iPhone** (version web installable,
 **https://sohhka.github.io/sohri/**) :
 
-- **Convertisseur ¥ → €** : le **taux du jour** (Banque centrale européenne) se met à jour tout seul
-  dès qu'il y a Internet (on peut aussi le modifier à la main, par exemple pour celui de sa carte :
-  il reste jusqu'au prochain taux publié), et juste en dessous **l'heure au Japon et en France**
-  (24 h, heure d'été comprise, mise à jour en direct, sans Internet).
-- **Météo & heure** : l'heure au Japon et en France, et la **météo de la semaine en cours** (du
-  lundi au dimanche) dans la ville choisie (Tokyo au départ, liste des villes du Japon ou
-  recherche). Gardée sur le téléphone pour être consultable hors connexion, elle se met à jour dès
-  qu'il y a Internet, même une minute.
+- **Convertisseur ¥ ⇄ €** : des yens vers les euros, ou l'inverse (⇅) ; **＋ additionne plusieurs
+  prix** (le panier d'une supérette…) et 🧾 note le montant comme dépense. Le **taux du jour**
+  (Banque centrale européenne) se met à jour tout seul dès qu'il y a Internet (on peut aussi le
+  modifier à la main, par exemple pour celui de sa carte : il reste jusqu'au prochain taux publié),
+  et juste en dessous **l'heure au Japon et en France** (24 h, heure d'été comprise, mise à jour en
+  direct, sans Internet).
+- **Dépenses** : chaque achat en yens ou en euros, avec une catégorie (repas, transport, shopping,
+  hébergement, visites…), un libellé et sa date ; le **total du voyage**, celui **du jour** et
+  **par catégorie**, en yens et en euros (chaque dépense au taux de son jour). Export en tableau
+  (CSV) pour Excel, Numbers ou Google Sheets.
+- **Météo & heure** : l'heure au Japon et en France, la **météo heure par heure** pour les
+  prochaines 24 heures (température, risque de pluie) et celle de la **semaine en cours** (du lundi
+  au dimanche) dans la ville choisie (Tokyo au départ, liste des villes du Japon ou recherche).
+  Gardée sur le téléphone pour être consultable hors connexion, elle se met à jour dès qu'il y a
+  Internet, même une minute.
 - **Notes** rangées dans des **dossiers** (Tokyo, Réservations…), avec mise en forme (titres, gras,
   listes, **cases à cocher**…), **emojis**, photos, **pièces jointes** (PDF de billets…), liées à une
   adresse. Export d'une note en fichier `.md`.
 - **Carnet d'adresses** par catégories (hébergement, restaurant, à visiter…) : itinéraire Google Maps,
   adresse en japonais à **montrer au chauffeur de taxi**, téléphone, site web, pièces jointes, notes liées.
+- **Phrases utiles** : une quarantaine de phrases en japonais (politesse, restaurant, transports,
+  achats, hôtel, urgences), avec la prononciation ; un toucher l'affiche **en grand, à montrer**.
+  Recherche, et numéros d'urgence (110 police, 119 ambulance et pompiers) appelables d'un toucher.
+  Sans Internet.
 - **Images** : des albums (« Tokyo », « Shibuya »…) pour ranger ses photos, classées par jour de prise de
   vue, avec une **description** et un **lieu** par photo et, une fois partagées, les **commentaires**
   des proches. En plein écran, **Télécharger** met la photo dans la galerie du téléphone (aussi pour
-  les photos des proches et celles des notes).
+  les photos des proches et celles des notes) ; en mode sélection, **plusieurs photos d'un coup**,
+  et **tout un album** d'un proche.
 - **Documents** : tous ses fichiers (PDF, images, vidéos, sons, textes…) rangés dans des dossiers
   et **affichés directement dans l'appli**.
 - **Partage** (facultatif) : avec un compte, montrer ses **Images** aux proches de son choix, qui
   les voient dans leur appli, même hors connexion une fois reçues, et retrouver **toutes ses
-  rubriques** (notes, adresses, images, documents) sur tous ses appareils.
+  rubriques** (notes, adresses, dépenses, images, documents) sur tous ses appareils. L'écran
+  montre l'**espace occupé en ligne** par soi et ses proches, et le menu l'état de la
+  synchronisation (✓ à jour, ⟳ en cours, 📴 hors connexion, ⚠️ problème).
 - **Paramètres** : thème **clair**, **sombre** ou automatique ; **sauvegarde** complète dans un fichier,
-  et restauration.
+  et restauration (avec la date de la dernière sauvegarde, et un rappel au bout de 7 jours) ;
+  **rapport de diagnostic** à envoyer quand quelque chose ne marche pas.
 
 Tout fonctionne hors connexion et les données restent sur le téléphone. Avec Internet, l'appli
 demande seulement des informations publiques, sans compte ni rien d'envoyé sur soi : le taux du
@@ -37,7 +52,7 @@ la synchronisation entre ses appareils.
 
 ## Installer l'appli sur Android
 
-1. Copier `dist/Sohri-2.2.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
+1. Copier `dist/Sohri-2.3.apk` sur le téléphone (câble USB, Google Drive, e-mail…), ou le
    télécharger depuis la page [Releases](https://github.com/Sohhka/sohri/releases/latest) du dépôt.
 2. L'ouvrir depuis le téléphone. Android demande d'autoriser l'installation d'applis depuis cette
    source (Fichiers, Drive…) : accepter.
@@ -45,7 +60,7 @@ la synchronisation entre ses appareils.
    une appli qui ne vient pas du Play Store.
 
 Il faut Android 8.0 ou plus récent. Une nouvelle version s'installe **par-dessus** l'ancienne :
-notes, adresses, images et documents sont conservés. Depuis la version 1.9, l'appli prévient
+notes, adresses, dépenses, images et documents sont conservés. Depuis la version 1.9, l'appli prévient
 elle-même (bandeau en bas de l'écran) quand une nouvelle version est publiée sur GitHub, avec son
 APK : **Mettre à jour** ouvre directement la page de cette version.
 
@@ -68,8 +83,8 @@ APK : **Mettre à jour** ouvre directement la page de cette version.
   partage de l'iPhone (Enregistrer dans Fichiers, AirDrop, Mail…).
 - **Télécharger** une photo (bouton ⬇ en plein écran) : Apple ne laisse pas une appli web écrire
   directement dans Photos ; la feuille de partage s'ouvre, et **Enregistrer l'image** l'y met
-  (l'appli l'explique la première fois). Sur Android, la photo va directement dans la galerie
-  (album « SOHRI »).
+  (l'appli l'explique la première fois). Plusieurs photos : **Enregistrer N images**, par paquets
+  de 20. Sur Android, les photos vont directement dans la galerie (album « SOHRI »).
 - Les mises à jour arrivent toutes seules : quand une nouvelle version est en ligne, un bandeau
   « Mettre à jour » s'affiche dans l'appli (il faut Internet à ce moment-là).
 - Supprimer l'icône de l'écran d'accueil efface les données de l'appli : faire une sauvegarde avant.
@@ -107,9 +122,21 @@ Le menu ⋮ d'un fichier permet de le partager, de l'ouvrir avec une autre appli
 ailleurs, de le renommer, de le déplacer ou de le supprimer. Les pièces jointes des notes et des
 adresses s'ouvrent dans la même visionneuse.
 
+## Dépenses
+
+**+** note un achat : montant en yens ou en euros (le choix convertit le montant déjà tapé),
+catégorie, libellé facultatif (« Ramen Ichiran »), date et heure (maintenant, au départ). Chaque
+dépense garde le taux du jour où elle a été notée : changer de taux plus tard ne modifie pas les
+totaux passés. Dans le convertisseur, 🧾 ouvre une dépense déjà remplie avec le montant (ou le
+total des prix additionnés avec ＋). Toucher une dépense la modifie ou la supprime ; le menu ⋮
+exporte toutes les dépenses en tableau (`SOHRI-depenses-AAAA-MM-JJ.csv`, colonnes séparées par
+« ; » et virgule décimale, comme l'attendent les tableurs en français).
+
+Les dépenses font partie des sauvegardes, et de « Synchroniser toutes mes rubriques ».
+
 ## Sauvegarder ses données
 
-Paramètres → **Créer une sauvegarde** enregistre tout (notes, adresses, images, documents, pièces jointes) dans
+Paramètres → **Créer une sauvegarde** enregistre tout (notes, adresses, dépenses, images, documents, pièces jointes) dans
 un fichier `SOHRI-sauvegarde-AAAA-MM-JJ.zip`, à ranger par exemple sur Google Drive ou iCloud Drive.
 **Restaurer une sauvegarde** remplace alors toutes les données de l'appli par celles du fichier. Une
 sauvegarde faite sur Android se restaure sur l'iPhone, et inversement, même si le fichier a été
@@ -119,6 +146,14 @@ le zip entier (pas le fichier `sohri.json` seul, qui ne contient pas les photos)
 
 À faire avant le départ et de temps en temps pendant le voyage : désinstaller l'appli, ou
 « Vider le stockage » dans les paramètres Android (sur iPhone : supprimer l'icône), efface tout.
+Les Paramètres indiquent la date de la dernière sauvegarde faite sur ce téléphone ; au bout de
+7 jours sans sauvegarde, un bandeau le rappelle (**Sauvegarder** la fait tout de suite, × le
+repousse de 3 jours). Pas de rappel quand toutes les rubriques sont synchronisées avec un compte.
+
+**Rapport de diagnostic** (Paramètres → Aide) : un texte à envoyer (WhatsApp, e-mail…) à la
+personne qui aide quand quelque chose ne marche pas : version de l'appli, téléphone, nombre de
+notes, d'adresses…, place occupée, état de la synchronisation et derniers messages d'erreur. Il
+ne contient jamais le contenu : ni texte, ni photo, ni adresse e-mail.
 
 ## Partager avec ses proches (facultatif)
 
@@ -158,20 +193,25 @@ celles des proches.
 ### Toutes mes rubriques sur tous mes appareils
 
 Partage → **Mes appareils** → **Synchroniser toutes mes rubriques** : les notes (avec leurs photos
-et pièces jointes), le carnet d'adresses, les documents, leurs dossiers et les Images sont alors les
-mêmes sur tous les appareils connectés au compte. Le réglage vaut pour le compte : on l'active une
+et pièces jointes), le carnet d'adresses, les dépenses, les documents, leurs dossiers et les Images
+sont alors les mêmes sur tous les appareils connectés au compte. Le réglage vaut pour le compte : on l'active une
 fois, sur n'importe quel appareil, et les autres s'y mettent à leur prochaine synchronisation.
 
 - Il faut Internet, et être connecté au même compte. Chaque appareil envoie ses changements et
   reçoit ceux des autres tout seul (à l'ouverture de l'appli, au retour d'Internet, quelques
-  secondes après une modification) ; la flèche ⟳ de l'écran Partage le fait tout de suite.
+  secondes après une modification) ; la flèche ⟳ de l'écran Partage le fait tout de suite. Dans
+  le menu, à côté de « Partage » : ✓ à jour, ⟳ en cours, 📴 hors connexion (les changements
+  partiront au retour d'Internet), ⚠️ problème (avec un point orange sur ☰).
 - La première fois, rien n'est effacé : ce que chaque appareil a déjà est réuni. Une même note
   présente des deux côtés (par exemple après une sauvegarde restaurée sur les deux) n'est gardée
   qu'une fois, dans sa version la plus récente.
 - Ensuite, un ajout, une modification, un renommage, un déplacement ou une suppression faits sur
   un appareil arrivent sur les autres. Une même note modifiée sur deux appareils avant qu'ils se
   synchronisent : la modification la plus récente l'emporte. Une note supprimée sur un appareil
-  mais modifiée sur un autre entre-temps est gardée : rien ne se perd.
+  mais modifiée sur un autre entre-temps est gardée : rien ne se perd. Deux appareils qui envoient
+  en même temps ne s'écrasent pas : le serveur refuse l'envoi de celui qui n'a pas vu le dernier
+  changement, qui relit et renvoie aussitôt (pour les Images aussi : la description changée sur
+  l'un et le lieu ajouté sur l'autre sont tous deux gardés).
 - Les fichiers (photos des notes, pièces jointes, documents) ne partent qu'une fois, même s'ils
   servent à plusieurs endroits. Un fichier de plus de 60 Mo reste seulement sur l'appareil où il
   est (l'écran Partage le signale). Les photos des Images arrivent réduites (1600 pixels) sur les
@@ -213,7 +253,10 @@ fois, sur n'importe quel appareil, et les autres s'y mettent à leur prochaine s
   ligne (les données du téléphone restent).
 - Serveur : Firebase (Google), formule gratuite, sans carte bancaire : 1 Go pour tout le monde
   (photos partagées et rubriques synchronisées), soit environ 3 000 photos partagées. Au-delà, les
-  nouveaux envois sont refusés (aucune facture possible).
+  nouveaux envois sont refusés (aucune facture possible). L'écran Partage montre l'**espace en
+  ligne** occupé (« Toi et tes proches : environ 250 Mo sur 1 Go »), avec la part de chacun :
+  chaque compte le mesure une fois par jour (ou « Mesurer maintenant ») ; un avertissement
+  s'affiche à partir de 80 %.
 - **Se déconnecter** (bouton en bas de l'écran Partage) retire du téléphone ce que les proches y
   avaient partagé et ce qui vient des autres appareils du compte (photos, notes…) ; tout revient à
   la reconnexion. Ce qui a été ajouté sur ce téléphone y reste, comme ce qui y a été modifié sans
@@ -232,6 +275,7 @@ Sohri/
 │   ├── sw.js                version web : copie hors connexion et mises à jour (service worker)
 │   ├── icons/               icônes de la version web (écran d'accueil de l'iPhone...)
 │   └── js/
+│       ├── diagnostic.js    derniers messages d'erreur, pour le rapport de diagnostic (chargé en premier)
 │       ├── db.js            stockage local (IndexedDB)
 │       ├── ui.js            boîtes de dialogue, menus du bas, visionneuse photo, carte taxi
 │       ├── router.js        navigation entre les vues (bouton ←, retour d'Android)
@@ -241,17 +285,23 @@ Sohri/
 │       │                    feuille de partage de l'iPhone
 │       ├── docviewer.js     visionneuse de documents (PDF, image, vidéo, son, texte)
 │       ├── folders.js       dossiers (notes, documents) et albums
-│       ├── converter.js     convertisseur ¥ → € (taux du jour) et heures du Japon et de la France
-│       ├── weather.js       Météo & heure : météo de la semaine (Open-Meteo)
+│       ├── converter.js     convertisseur ¥ ⇄ € (taux du jour, addition de prix) et heures du
+│       │                    Japon et de la France
+│       ├── expenses.js      Dépenses : totaux, catégories, export CSV
+│       ├── weather.js       Météo & heure : heure par heure et semaine (Open-Meteo)
 │       ├── notes.js         notes
 │       ├── addresses.js     carnet d'adresses
+│       ├── phrases.js       Phrases utiles (japonais, en grand) et numéros d'urgence
 │       ├── gallery.js       Images : albums et photos
 │       ├── documents.js     Documents : fichiers et dossiers
 │       ├── backup.js        sauvegarde et restauration (.zip)
-│       ├── settings.js      Paramètres
-│       ├── cloud.js         partage : comptes, contacts, envoi et réception (API de Firebase)
-│       ├── sync.js          toutes mes rubriques sur tous mes appareils (notes, adresses, documents)
-│       ├── sharing.js       partage : écrans (compte, contacts, mes appareils, albums reçus)
+│       ├── settings.js      Paramètres (rappel de sauvegarde, rapport de diagnostic)
+│       ├── cloud.js         partage : comptes, contacts, envoi et réception, espace en ligne
+│       │                    (API de Firebase)
+│       ├── sync.js          toutes mes rubriques sur tous mes appareils (notes, adresses,
+│       │                    dépenses, documents)
+│       ├── sharing.js       partage : écrans (compte, contacts, mes appareils, espace en ligne),
+│       │                    témoin de synchronisation dans le menu
 │       ├── comments.js      fiche d'une photo : description et commentaires
 │       ├── cloud-config.js  projet Firebase (local, jamais dans le dépôt : voir plus bas)
 │       ├── app.js           menu, bouton retour, version web (hors connexion, mises à jour,
@@ -265,6 +315,7 @@ Sohri/
 │   └── keystore/            clé de signature : À CONSERVER (voir plus bas), jamais sur GitHub
 ├── firebase/                partage : règles de sécurité de la base (firestore.rules), réglages
 │                            de l'émulateur pour les essais (firebase.json)
+├── tests/                   tests automatiques (voir « Tests » et tests/README.md)
 ├── tools/build-web.js       prépare la version web dans _site/ (liste des fichiers hors connexion)
 ├── .github/workflows/       mise en ligne automatique de la version web (GitHub Pages)
 ├── dist/                    APK générés
@@ -287,6 +338,22 @@ Sohri/
 Le nom affiché sous l'icône se trouve dans `android/app/src/main/res/values/strings.xml`. Avec un
 téléphone branché en USB (débogage USB activé), `build-apk.ps1 -Install` construit et installe
 directement.
+
+## Tests
+
+Le dossier `tests/` vérifie l'appli entière dans de vrais navigateurs : Chrome (avec une appli
+Android simulée) et le moteur de Safari (iPhone), plus les règles du serveur sur l'émulateur
+Firebase, lancé et arrêté tout seul. Une fois installé (`cd tests`, `npm install`, puis
+`npm run setup`) :
+
+```
+cd tests
+npm test            (tous les tests)
+node run.js 13 15   (seulement certains)
+```
+
+Le détail (installation, liste des tests, captures d'écran produites) est dans `tests/README.md`.
+À lancer avant chaque nouvelle version.
 
 ## ⚠ La clé de signature
 
@@ -315,9 +382,9 @@ projet est dans OneDrive, les fichiers de compilation temporaires sont placés d
 
 `MainActivity` affiche `www/` dans une WebView, servi localement à l'adresse
 `https://appassets.androidplatform.net/` (`WebViewAssetLoader`). Les données sont dans IndexedDB
-(magasins `notes`, `addresses`, `settings`, `folders` pour les dossiers et les albums, `photos`,
-`documents` pour la description des fichiers et `documentFiles` pour leur contenu ; pour le
-partage, hors sauvegardes : `cloud`, `sharedAlbums`, `sharedPhotos`, `sharedComments`).
+(magasins `notes`, `addresses`, `expenses`, `settings`, `folders` pour les dossiers et les albums,
+`photos`, `documents` pour la description des fichiers et `documentFiles` pour leur contenu ;
+pour le partage, hors sauvegardes : `cloud`, `sharedAlbums`, `sharedPhotos`, `sharedComments`).
 
 Les images (photos, miniatures, pièces jointes) y sont des `Blob`. Safari a un défaut : une image
 lue dans la base puis réenregistrée telle quelle (description modifiée, photo reçue en grand
@@ -374,13 +441,21 @@ que ce qui a changé depuis sa dernière visite. Les commentaires écrits hors c
 le magasin `sharedComments` (`pending`) jusqu'au retour du réseau.
 
 Avec « Synchroniser toutes mes rubriques » (champ `syncAll` du profil), `sync.js` ajoute, visibles
-du seul propriétaire : `items` (une note, une adresse, un dossier ou un document, décrit en JSON,
+du seul propriétaire : `items` (une note, une adresse, une dépense, un dossier ou un document, décrit en JSON,
 avec les empreintes de ses fichiers ; identifiant tiré de sa date de création, le même sur tous
 les appareils), `blobs` (un fichier, nommé par son empreinte SHA-256 : un contenu identique n'est
 envoyé qu'une fois) et `blobParts` (ses morceaux de moins de 1 Mo). Chaque appareil garde, dans
 le magasin `cloud`, l'empreinte de chaque élément au dernier échange : ce qui n'a changé qu'ici
 part, ce qui n'a changé qu'ailleurs arrive, et, changé des deux côtés, le plus récent l'emporte.
 Une fois par jour, les fichiers en ligne dont plus aucun élément n'a besoin sont effacés.
+
+Les envois (rubriques comme Images) sont **conditionnels** : chaque écriture porte la version du
+document au dernier échange (`currentDocument.updateTime`, ou « n'existe pas encore » pour un
+ajout). Si un autre appareil l'a changé entre-temps, le serveur refuse l'envoi
+(`FAILED_PRECONDITION`) ; la synchronisation relit alors les changements et renvoie aussitôt.
+Une fois par jour, chaque compte additionne la taille de ce qu'il a en ligne et l'inscrit dans
+son profil (`usageBytes`, `usageAt`), lisible par ses proches : c'est l'« espace en ligne » de
+l'écran Partage.
 
 **Qui peut faire quoi** est décidé par le serveur, dans `firebase/firestore.rules` : chacun n'écrit
 que chez lui, ne lit que ce qu'on lui a partagé, et l'inscription demande le code d'un membre.

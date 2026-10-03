@@ -28,6 +28,7 @@ var weatherLoading = null;  // demande en cours
 var weatherFailures = 0;
 var weatherRetryTimer = null;
 var weatherShownDate = null; // jour affiché (le lundi, la semaine change)
+var weatherShownHour = null; // heure affichée (bande « heure par heure »)
 
 defineView('weather', {
   el: 'view-weather',
@@ -98,16 +99,22 @@ function weatherUrl(city) {
   return WEATHER_API + '?latitude=' + city.lat + '&longitude=' + city.lon +
     '&current=temperature_2m,apparent_temperature,weather_code,is_day' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
+    '&hourly=temperature_2m,precipitation_probability,weather_code,is_day' +
     '&timezone=auto&past_days=6&forecast_days=7';
 }
 
 function readWeather(json, city) {
   var daily = json.daily || {};
+  var hourly = json.hourly || {};
   var current = json.current || null;
+  var offset = json.utc_offset_seconds || 0;
+  // Heure par heure : à partir d'aujourd'hui là-bas (heures locales « 2026-10-03T14:00 »).
+  var today = isoDay(new Date(Date.now() + offset * 1000));
+  var at = function (list, i) { return list ? list[i] : null; };
   return {
     city: city,
     fetchedAt: Date.now(),
-    offset: json.utc_offset_seconds || 0,
+    offset: offset,
     timezone: json.timezone || city.timezone,
     current: current && {
       temp: current.temperature_2m, feels: current.apparent_temperature,
@@ -119,8 +126,22 @@ function readWeather(json, city) {
         max: daily.temperature_2m_max[i], min: daily.temperature_2m_min[i],
         rain: daily.precipitation_probability_max ? daily.precipitation_probability_max[i] : null
       };
-    })
+    }),
+    hours: (hourly.time || []).map(function (time, i) {
+      return {
+        time: time, temp: at(hourly.temperature_2m, i), rain: at(hourly.precipitation_probability, i),
+        code: at(hourly.weather_code, i), night: at(hourly.is_day, i) === 0
+      };
+    }).filter(function (hour) { return hour.time.slice(0, 10) >= today; })
   };
+}
+
+/* Les prochaines heures là-bas, à partir de l'heure en cours (24 au plus). */
+var WEATHER_HOURS = 24;
+function nextHours(data, now) {
+  var local = zoneWall(now, cityOffset(now));
+  var current = isoDay(local) + 'T' + pad2(local.getUTCHours()) + ':00';
+  return (data.hours || []).filter(function (hour) { return hour.time >= current; }).slice(0, WEATHER_HOURS);
 }
 
 /* maxAge : pas de nouvelle demande si la météo gardée est plus récente (sauf semaine incomplète). */
@@ -214,6 +235,7 @@ function renderWeather() {
   var now = new Date();
   var week = currentWeek(now);
   weatherShownDate = week.today;
+  weatherShownHour = zoneWall(now, cityOffset(now)).getUTCHours();
   var data = weatherData && sameCity(weatherData.city, weatherCity) ? weatherData : null;
   var byDate = {};
   if (data) data.days.forEach(function (d) { byDate[d.date] = d; });
@@ -240,6 +262,21 @@ function renderWeather() {
         today.rain !== null ? h('span', { text: '💧 ' + today.rain + ' %' }) : null
       ]) : null
     ]));
+  }
+
+  // Les prochaines heures (pluie, température), à faire défiler sur le côté.
+  var hours = data ? nextHours(data, now) : [];
+  if (hours.length) {
+    box.appendChild(h('div', { className: 'weather-hours', role: 'list', 'aria-label': 'Météo des prochaines heures' }, hours.map(function (hour, i) {
+      var look = weatherLook(hour.code, hour.night);
+      var clock = parseInt(hour.time.slice(11, 13), 10);
+      return h('div', { className: 'weather-hour' + (i === 0 ? ' is-now' : ''), role: 'listitem', title: look[1] }, [
+        h('span', { className: 'weather-hour-time', text: clock === 0 && i > 0 ? 'Demain' : clock + ' h' }),
+        h('span', { className: 'weather-hour-icon', text: look[0], 'aria-label': look[1] }),
+        h('span', { className: 'weather-hour-temp', text: temp(hour.temp) }),
+        h('span', { className: 'weather-hour-rain' + (hour.rain >= 50 ? ' is-likely' : ''), text: hour.rain !== null && hour.rain !== undefined ? '💧' + hour.rain + '%' : '' })
+      ]);
+    })));
   }
 
   // La semaine, du lundi au dimanche.
@@ -278,12 +315,15 @@ function weatherStatusText(data, week) {
 }
 
 /* ---------- Mises à jour ---------- */
-// Nouveau jour (ou nouvelle semaine, le lundi) pendant que la page est affichée.
+// Nouveau jour (ou nouvelle semaine, le lundi) pendant que la page est affichée ; nouvelle heure :
+// la bande « heure par heure » repart de l'heure en cours.
 clockListeners.push(function (now) {
   if (currentViewName() !== 'weather') return;
   if (currentWeek(now).today !== weatherShownDate) {
     renderWeather();
     refreshWeather();
+  } else if (zoneWall(now, cityOffset(now)).getUTCHours() !== weatherShownHour) {
+    renderWeather();
   }
 });
 // Internet revient (même une minute) : la météo en profite aussitôt.

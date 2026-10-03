@@ -1,0 +1,13 @@
+{
+  "name": "sohri-tests",
+  "private": true,
+  "description": "Tests automatiques de SOHRI (voir README.md)",
+  "scripts": {
+    "test": "node run.js",
+    "setup": "node node_modules/playwright-core/cli.js install webkit"
+  },
+  "devDependencies": {
+    "firebase-tools": "15.32.1",
+    "playwright-core": "1.63.0"
+  }
+}

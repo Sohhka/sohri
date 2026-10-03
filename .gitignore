@@ -22,3 +22,11 @@ android/keystore/
 www/js/cloud-config.js
 firebase/.firebaserc
 firebase/*.log
+
+# Tests automatiques : outils installés (npm install) et résultats (journaux, captures d'écran)
+tests/node_modules/
+tests/package-lock.json
+tests/out/
+tests/*.log
+firebase-debug.log
+firestore-debug.log

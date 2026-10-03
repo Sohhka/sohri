@@ -32,6 +32,7 @@ for (var d = 0; d < drawerItems.length; d++) {
 window.handleBackButton = function () {
   if (!byId('progress').hidden) return true; // opération en cours : on attend
   if (!byId('taxi').hidden) { closeTaxiCard(); return true; }
+  if (isPhraseCardOpen()) { closePhraseCard(); return true; }
   if (!byId('sheet').hidden) { closeSheet(); return true; }
   if (!byId('dialog').hidden) { closeDialog(false); return true; }
   if (!byId('viewer').hidden) { closeViewer(); return true; }
@@ -234,3 +235,7 @@ if (IS_WEB) {
 goToSection('converter');
 loadRate();
 cloudStart(); // partage : seulement si un compte est connecté sur ce téléphone
+// Rappel de sauvegarde (voir settings.js), une fois l'appli lancée et le compte chargé.
+setTimeout(function () {
+  checkBackupReminder()['catch'](function (err) { console.error(err); });
+}, 4000);

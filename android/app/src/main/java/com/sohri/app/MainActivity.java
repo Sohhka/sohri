@@ -51,6 +51,8 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
 
+import org.json.JSONObject;
+
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -58,6 +60,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -90,7 +94,7 @@ public class MainActivity extends ComponentActivity {
     private SharedPreferences prefs;
     private final Map<String, Transfer> transfers = new ConcurrentHashMap<>();
     private Transfer pendingSave;
-    private Transfer pendingGallery; // en attente de l'autorisation d'écrire (Android 8 et 9)
+    private final List<Transfer> pendingGallery = new ArrayList<>(); // en attente de l'autorisation d'écrire (Android 8 et 9)
     private View fullscreenView; // vidéo en plein écran
     private WebChromeClient.CustomViewCallback fullscreenCallback;
 
@@ -282,11 +286,13 @@ public class MainActivity extends ComponentActivity {
 
     /** Fichier reçu de la page en morceaux (base64), puis ouvert, partagé ou enregistré. */
     private static final class Transfer {
+        final String id;
         final File file;
         final String mimeType;
         final OutputStream out;
 
-        Transfer(File file, String mimeType, OutputStream out) {
+        Transfer(String id, File file, String mimeType, OutputStream out) {
+            this.id = id;
             this.file = file;
             this.mimeType = mimeType;
             this.out = out;
@@ -330,6 +336,7 @@ public class MainActivity extends ComponentActivity {
         } catch (ActivityNotFoundException e) {
             pendingSave = null;
             Toast.makeText(this, R.string.no_app_for_file, Toast.LENGTH_SHORT).show();
+            if ("save".equals(action)) reportSaved(transfer, false);
         }
     }
 
@@ -337,14 +344,25 @@ public class MainActivity extends ComponentActivity {
     private void onSaveLocationChosen(ActivityResult result) {
         Transfer transfer = pendingSave;
         pendingSave = null;
+        if (transfer == null) return;
         Intent data = result.getData();
-        if (transfer == null || result.getResultCode() != RESULT_OK || data == null || data.getData() == null) return;
+        if (result.getResultCode() != RESULT_OK || data == null || data.getData() == null) {
+            reportSaved(transfer, false); // fenêtre fermée sans choisir
+            return;
+        }
         Uri target = data.getData();
         new Thread(() -> {
             boolean saved = copyToUri(transfer.file, target);
-            runOnUiThread(() -> Toast.makeText(this,
-                    saved ? R.string.file_saved : R.string.file_save_failed, Toast.LENGTH_SHORT).show());
+            runOnUiThread(() -> {
+                Toast.makeText(this, saved ? R.string.file_saved : R.string.file_save_failed, Toast.LENGTH_SHORT).show();
+                reportSaved(transfer, saved);
+            });
         }).start();
+    }
+
+    /** La page apprend si le fichier a été enregistré (date de la dernière sauvegarde). */
+    private void reportSaved(Transfer transfer, boolean saved) {
+        runInPage("window.onFileSaved && onFileSaved(" + JSONObject.quote(transfer.id) + "," + saved + ")");
     }
 
     private boolean copyToUri(File source, Uri target) {
@@ -363,12 +381,13 @@ public class MainActivity extends ComponentActivity {
     /* ---------- « Télécharger » : photo copiée dans la galerie du téléphone (album SOHRI) ---------- */
 
     /** À partir d'Android 10, aucune autorisation n'est nécessaire ; Android 8 et 9 la demandent une
-     *  fois (écrire dans les fichiers du téléphone). */
+     *  fois (écrire dans les fichiers du téléphone). Le résultat est renvoyé à la page
+     *  (onGallerySaved), qui l'affiche : une photo, ou un groupe de photos avec leur décompte. */
     private void saveToGallery(Transfer transfer) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && ContextCompat.checkSelfPermission(this,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            pendingGallery = transfer;
-            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            pendingGallery.add(transfer);
+            if (pendingGallery.size() == 1) storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
             return;
         }
         String type = mimeTypeOf(transfer);
@@ -380,17 +399,22 @@ public class MainActivity extends ComponentActivity {
                 saved = false;
             }
             boolean done = saved;
-            runOnUiThread(() -> Toast.makeText(this,
-                    done ? R.string.gallery_saved : R.string.gallery_save_failed, Toast.LENGTH_SHORT).show());
+            runOnUiThread(() -> reportGallery(transfer, done, done ? "" : "failed"));
         }).start();
     }
 
     private void onStoragePermission(boolean granted) {
-        Transfer transfer = pendingGallery;
-        pendingGallery = null;
-        if (transfer == null) return;
-        if (granted) saveToGallery(transfer);
-        else Toast.makeText(this, R.string.gallery_permission_denied, Toast.LENGTH_LONG).show();
+        List<Transfer> waiting = new ArrayList<>(pendingGallery);
+        pendingGallery.clear();
+        for (Transfer transfer : waiting) {
+            if (granted) saveToGallery(transfer);
+            else reportGallery(transfer, false, "permission");
+        }
+    }
+
+    private void reportGallery(Transfer transfer, boolean saved, String reason) {
+        runInPage("window.onGallerySaved && onGallerySaved(" + JSONObject.quote(transfer.id) + ","
+                + saved + "," + JSONObject.quote(reason) + ")");
     }
 
     @SuppressWarnings("deprecation") // dossier public : seulement avant Android 10
@@ -676,7 +700,7 @@ public class MainActivity extends ComponentActivity {
             File dir = new File(new File(getCacheDir(), EXPORT_DIR), UUID.randomUUID().toString());
             if (!dir.mkdirs()) throw new IOException("Dossier temporaire impossible à créer");
             File file = new File(dir, safeFileName(name));
-            transfers.put(dir.getName(), new Transfer(file, mimeType, new BufferedOutputStream(new FileOutputStream(file))));
+            transfers.put(dir.getName(), new Transfer(dir.getName(), file, mimeType, new BufferedOutputStream(new FileOutputStream(file))));
             return dir.getName();
         }
 

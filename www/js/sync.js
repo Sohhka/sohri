@@ -1,7 +1,7 @@
 /* ---------- Toutes mes rubriques, les mêmes sur tous mes appareils (facultatif) ----------
    Réglage du compte « syncAll » (Partage → Mes appareils), valable pour tous ses appareils. Avec
    Internet, chacun envoie ses changements et reçoit ceux des autres : notes, carnet d'adresses,
-   documents, et leurs dossiers (les Images ont leur propre synchronisation : cloud.js).
+   documents, leurs dossiers, et dépenses (les Images ont leur propre synchronisation : cloud.js).
    En ligne, visible de son seul propriétaire (firestore.rules) :
    - users/{moi}/items/{id} : un élément, décrit en JSON (data), avec les empreintes de ses fichiers
      (blobs). Son identifiant, tiré de sa date de création, est le même sur tous les appareils ;
@@ -14,12 +14,13 @@
    pour un élément modifié ailleurs entre-temps (il est gardé).
    Magasin « cloud » : « ipub:<id> » (empreinte de l'élément au dernier échange), « ipend:<id> »
    (élément pas encore reçu, redemandé), « iown » (repère des changements reçus), « iready » (fusion
-   faite), « igc » (dernier ménage des fichiers en ligne). Les éléments venus d'un autre appareil
+   faite), « ikinds » (types d'éléments connus de cet appareil quand il a reçu les changements),
+   « igc » (dernier ménage des fichiers en ligne). Les éléments venus d'un autre appareil
    sont marqués « fromAccount » : ils quittent le téléphone à la déconnexion (ils restent sur le
    compte et reviennent à la connexion suivante). */
-var ITEM_STORES = { folder: 'folders', address: 'addresses', note: 'notes', document: 'documents' };
-var ITEM_ORDER = { folder: 0, address: 1, note: 2, document: 3 }; // dossiers et adresses d'abord : les notes y renvoient
-var ITEM_PREFIX = { folder: 'f', address: 'l', note: 'n', document: 'd' };
+var ITEM_STORES = { folder: 'folders', address: 'addresses', note: 'notes', document: 'documents', expense: 'expenses' };
+var ITEM_ORDER = { folder: 0, address: 1, note: 2, document: 3, expense: 4 }; // dossiers et adresses d'abord : les notes y renvoient
+var ITEM_PREFIX = { folder: 'f', address: 'l', note: 'n', document: 'd', expense: 'e' };
 var ITEM_FOLDER_KINDS = ['notes', 'documents']; // les albums (« photos ») sont ceux des Images
 // Champs propres à ce téléphone (identifiants, marques de synchronisation), ou transmis à part.
 var ITEM_OWN_FIELDS = {
@@ -84,7 +85,7 @@ function itemTime(value) {
   return Number(value.updatedAt || value.createdAt) || 0;
 }
 function itemName(item) {
-  return item.record.name || item.record.title || 'Sans titre';
+  return item.record.name || item.record.title || item.record.label || 'Sans titre';
 }
 function uniqueList(list) {
   var seen = {};
@@ -191,7 +192,7 @@ function rememberItem(ctx, item) {
 
 /* Tous les éléments d'ici, par identifiant commun, avec la correspondance des dossiers et adresses. */
 function loadLocalItems() {
-  return Promise.all([dbGetAll('folders'), dbGetAll('addresses'), dbGetAll('notes'), dbGetAll('documents')]).then(function (r) {
+  return Promise.all([dbGetAll('folders'), dbGetAll('addresses'), dbGetAll('notes'), dbGetAll('documents'), dbGetAll('expenses')]).then(function (r) {
     var ctx = { byRid: {}, folderRid: {}, folderId: {}, addressRid: {}, addressId: {} };
     var add = function (kind) {
       return function (record) {
@@ -204,6 +205,7 @@ function loadLocalItems() {
     r[1].forEach(add('address'));
     r[2].forEach(add('note'));
     r[3].forEach(add('document'));
+    r[4].forEach(add('expense'));
     return ctx;
   });
 }
@@ -261,7 +263,7 @@ function isWriteConflict(err) {
 function forgetItemState() {
   return dbGetAll('cloud').then(function (rows) {
     var keys = rows.map(function (row) { return row.key; }).filter(function (key) {
-      return key.indexOf('ipub:') === 0 || key.indexOf('ipend:') === 0 || key === 'iown' || key === 'iready' || key === 'igc';
+      return key.indexOf('ipub:') === 0 || key.indexOf('ipend:') === 0 || key === 'iown' || key === 'iready' || key === 'ikinds' || key === 'igc';
     });
     if (!keys.length) return null;
     return dbWrite(['cloud'], function (tx) {
@@ -278,7 +280,7 @@ function mergeOwnItems() {
     return fsChangesSince(userPath(), 'items', null, function (page) { docs = docs.concat(page); });
   }).then(function (last) {
     return applyOwnItems(docs, true).then(function () {
-      return Promise.all([cloudPut('iown', last), cloudPut('iready', cloudSession.uid)]);
+      return Promise.all([cloudPut('iown', last), cloudPut('iready', cloudSession.uid), cloudPut('ikinds', itemKinds())]);
     });
   });
 }
@@ -291,13 +293,56 @@ function pullOwnItems() {
     return fsChangesSince(userPath(), 'items', since, function (page) { docs = docs.concat(page); });
   }).then(function (seen) {
     last = seen;
+    return newKindDocs(docs);
+  }).then(function (extra) {
+    docs = docs.concat(extra);
     return pendingItemDocs(docs);
   }).then(function (pending) {
     var all = docs.concat(pending);
     return all.length ? applyOwnItems(all, false) : null;
   }).then(function () {
-    return cloudPut('iown', last);
+    return Promise.all([cloudPut('iown', last), cloudPut('ikinds', itemKinds())]);
   });
+}
+
+/* Types d'éléments que cet appareil sait recevoir. Une version précédente passait ceux qu'elle ne
+   connaissait pas (les dépenses, avant la 2.3) sans les retenir, tout en avançant son repère : mise
+   à jour, elle relit une fois en entier les éléments de ces types. */
+var ITEM_KINDS_BEFORE = ['address', 'document', 'folder', 'note']; // versions 2.1 et 2.2 (« ikinds » pas noté)
+function itemKinds() {
+  return Object.keys(ITEM_STORES).sort();
+}
+
+function newKindDocs(docs) {
+  return cloudGet('ikinds').then(function (known) {
+    known = known || ITEM_KINDS_BEFORE;
+    var missing = itemKinds().filter(function (kind) { return known.indexOf(kind) < 0; });
+    var seen = {};
+    docs.forEach(function (doc) { seen[doc._id] = true; });
+    return Promise.all(missing.map(listItemsOfKind)).then(function (lists) {
+      return [].concat.apply([], lists).filter(function (doc) { return !seen[doc._id]; });
+    });
+  });
+}
+
+/* Tous mes éléments d'un type, page par page (les traces de suppression n'ont plus de type). */
+function listItemsOfKind(kind) {
+  var me = userPath();
+  var all = [];
+  function next(after) {
+    var query = {
+      from: [{ collectionId: 'items' }],
+      where: fieldEquals('kind', kind),
+      orderBy: [{ field: { fieldPath: '__name__' }, direction: 'ASCENDING' }],
+      limit: SYNC_QUERY_PAGE
+    };
+    if (after) query.startAt = { values: [{ referenceValue: after }], before: false };
+    return fsQuery(me, query).then(function (docs) {
+      all = all.concat(docs);
+      return docs.length < SYNC_QUERY_PAGE ? all : next(docs[docs.length - 1]._name);
+    });
+  }
+  return next(null);
 }
 
 /* Éléments à relire : pas encore reçus (fichier pas encore en ligne...), ou dont l'envoi a été
@@ -855,7 +900,7 @@ function leaveItemSync() {
 }
 
 function adoptAccountItems() {
-  var stores = ['folders', 'addresses', 'notes', 'documents'];
+  var stores = ['folders', 'addresses', 'notes', 'documents', 'expenses'];
   return Promise.all(stores.map(function (store) { return dbGetAll(store); })).then(function (lists) {
     var changed = [];
     lists.forEach(function (records, i) {
@@ -897,7 +942,7 @@ function forgetAccountItems(uid) {
     var adopt = items.filter(function (item) { return item.record.fromAccount === uid && !leaving[item.rid]; });
     if (!remove.length && !adopt.length) return null;
     return Promise.all(adopt.map(function (item) { return detachBlobs(item.record); })).then(function () {
-      return dbWrite(['folders', 'addresses', 'notes', 'documents', 'documentFiles'], function (tx) {
+      return dbWrite(['folders', 'addresses', 'notes', 'documents', 'documentFiles', 'expenses'], function (tx) {
         remove.forEach(function (item) {
           tx.objectStore(ITEM_STORES[item.kind])['delete'](item.record.id);
           if (item.kind === 'document' && item.record.fileId != null) tx.objectStore('documentFiles')['delete'](item.record.fileId);
@@ -914,5 +959,5 @@ function forgetAccountItems(uid) {
 // Changements reçus de mes autres appareils : listes et fiches réaffichées (pas les formulaires).
 onCloudChange(function (what) {
   if (what !== 'items') return;
-  if (['notes', 'note', 'addresses', 'address', 'documents'].indexOf(currentViewName()) >= 0) refreshView();
+  if (['notes', 'note', 'addresses', 'address', 'documents', 'expenses'].indexOf(currentViewName()) >= 0) refreshView();
 });

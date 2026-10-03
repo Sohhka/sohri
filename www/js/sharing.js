@@ -80,6 +80,7 @@ function renderSharing() {
   }
 
   renderSyncAll(box);
+  renderUsage(box);
 
   box.appendChild(h('h2', { className: 'section-title', text: 'Ce que je partage' }));
   Object.keys(CLOUD_CATEGORIES).forEach(function (category) {
@@ -127,8 +128,8 @@ function renderSyncAll(box) {
     h('span', { className: 'list-row-main' }, [
       h('span', { className: 'list-row-title', text: 'Synchroniser toutes mes rubriques' }),
       h('span', { className: 'list-row-sub', text: enabled
-        ? 'Notes, adresses, images et documents : les mêmes sur tous tes appareils connectés à ce compte.'
-        : 'Pour retrouver tes notes, adresses, images et documents sur tous tes appareils connectés à ce compte.' })
+        ? 'Notes, adresses, dépenses, images et documents : les mêmes sur tous tes appareils connectés à ce compte.'
+        : 'Pour retrouver tes notes, adresses, dépenses, images et documents sur tous tes appareils connectés à ce compte.' })
     ]),
     checkbox
   ]));
@@ -139,9 +140,55 @@ function renderSyncAll(box) {
   }
 }
 
+/* Espace en ligne : le mien et celui de mes proches, sur le 1 Go du serveur gratuit (voir
+   measureOnlineUsage, cloud.js). */
+var usageMeasuring = false;
+
+function renderUsage(box) {
+  var profile = cloudState.profile || {};
+  var card = h('div', { className: 'card usage-card' });
+  box.appendChild(h('h2', { className: 'section-title', text: 'Espace en ligne' }));
+  box.appendChild(card);
+  var measure = h('button', {
+    type: 'button', className: 'link-btn', text: usageMeasuring ? 'Mesure en cours…' : 'Mesurer maintenant', disabled: usageMeasuring,
+    onclick: function () {
+      usageMeasuring = true;
+      if (currentViewName() === 'sharing') renderSharing();
+      measureOnlineUsage(true).then(null, function (err) {
+        uiAlert(cloudErrorText(err));
+      }).then(function () {
+        usageMeasuring = false;
+        if (currentViewName() === 'sharing') renderSharing();
+      });
+    }
+  });
+  if (!profile.usageAt) {
+    card.appendChild(h('p', { className: 'card-text', text: 'Pas encore mesuré : ça se fait tout seul à la prochaine synchronisation.' }));
+    card.appendChild(measure);
+    return;
+  }
+  var people = [{ name: 'Toi', bytes: profile.usageBytes || 0 }].concat((cloudState.familyUsage || []).map(function (u) {
+    return { name: u.name, bytes: u.bytes };
+  }));
+  var total = people.reduce(function (sum, p) { return sum + (p.bytes || 0); }, 0);
+  var share = Math.min(1, total / FREE_QUOTA);
+  card.classList.toggle('is-full', share >= 0.8);
+  var percent = share > 0 && share < 0.005 ? 'moins de 1 %' : Math.round(share * 100) + ' %';
+  card.appendChild(h('p', { className: 'usage-total', text: (people.length > 1 ? 'Toi et tes proches : ' : '') + 'environ ' + formatSize(total) + ' sur 1 Go (' + percent + ')' }));
+  card.appendChild(h('span', { className: 'usage-bar' }, [h('span', { className: 'usage-bar-fill', style: 'width:' + Math.max(1, Math.round(share * 100)) + '%' })]));
+  if (people.length > 1) {
+    card.appendChild(h('p', { className: 'hint usage-people', text: people.map(function (p) {
+      return p.name + ' : ' + (p.bytes === null || p.bytes === undefined ? 'pas encore mesuré' : formatSize(p.bytes));
+    }).join(' · ') }));
+  }
+  if (share >= 0.8) card.appendChild(h('p', { className: 'hint usage-warning', text: 'Bientôt plein : au-delà de 1 Go, les nouveaux envois (photos, rubriques) seront refusés.' }));
+  card.appendChild(h('p', { className: 'hint', text: 'Mesuré le ' + formatDateTime(serverTime(profile.usageAt)) + '. Estimation : photos et fichiers en ligne.' }));
+  card.appendChild(measure);
+}
+
 function setSyncAll(wanted) {
   var question = wanted
-    ? 'Synchroniser toutes tes rubriques ? Tes notes, adresses, images et documents (avec leurs photos et fichiers joints) seront envoyés sur le serveur Firebase (Google), visibles de toi seul, puis reçus par tes autres appareils connectés à ce compte. Rien n\'est effacé : ce que chaque appareil a déjà est réuni. Le serveur gratuit offre 1 Go en tout.'
+    ? 'Synchroniser toutes tes rubriques ? Tes notes, adresses, dépenses, images et documents (avec leurs photos et fichiers joints) seront envoyés sur le serveur Firebase (Google), visibles de toi seul, puis reçus par tes autres appareils connectés à ce compte. Rien n\'est effacé : ce que chaque appareil a déjà est réuni. Le serveur gratuit offre 1 Go en tout.'
     : 'Arrêter la synchronisation ? Ta copie en ligne sera effacée ; chaque appareil garde ce qu\'il a.' + (sharedWith('albums').length ? ' Tes Images restent en ligne pour tes proches.' : '');
   uiConfirm(question, wanted ? 'Synchroniser' : 'Arrêter', !wanted).then(function (ok) {
     if (!ok) return;
@@ -162,6 +209,28 @@ function setSyncAll(wanted) {
 function updateStatusLine() {
   var lines = document.querySelectorAll('.js-cloud-status');
   for (var i = 0; i < lines.length; i++) fillStatusLine(lines[i]);
+  updateSyncIndicator();
+}
+
+/* Dans le menu, à côté de « Partage » : ✓ à jour, ⟳ en cours, 📴 hors connexion, ⚠️ problème (et
+   alors un point orange sur ☰, visible sans ouvrir le menu). */
+var syncIndicator = byId('drawerSharing').appendChild(h('span', { className: 'drawer-sync', hidden: true }));
+var SYNC_LOOKS = {
+  syncing: { icon: '⟳', label: 'Synchronisation en cours', className: 'is-busy' },
+  done: { icon: '✓', label: 'À jour', className: 'is-ok' },
+  offline: { icon: '📴', label: 'Hors connexion', className: 'is-off' },
+  error: { icon: '⚠️', label: 'Problème de synchronisation', className: 'is-alert' },
+  'signed-out': { icon: '⚠️', label: 'Session expirée : reconnecte-toi', className: 'is-alert' }
+};
+
+function updateSyncIndicator() {
+  var look = isSignedIn() ? SYNC_LOOKS[cloudStatus.state] : null;
+  syncIndicator.hidden = !look;
+  syncIndicator.className = 'drawer-sync' + (look ? ' ' + look.className : '');
+  syncIndicator.textContent = look ? look.icon : '';
+  syncIndicator.title = look ? look.label : '';
+  if (look) syncIndicator.setAttribute('aria-label', look.label);
+  byId('navBtn').classList.toggle('has-alert', !!look && look.className === 'is-alert');
 }
 
 function fillStatusLine(line) {
@@ -262,7 +331,7 @@ function signOut() {
 }
 
 function deleteAccount() {
-  uiConfirm('Supprimer ton compte ? Tes contacts et tout ce que tu partages seront effacés du serveur, et tes proches ne verront plus rien. Tes notes, adresses, images et documents restent sur ce téléphone.', 'Supprimer', true)
+  uiConfirm('Supprimer ton compte ? Tes contacts et tout ce que tu partages seront effacés du serveur, et tes proches ne verront plus rien. Tes notes, adresses, dépenses, images et documents restent sur ce téléphone.', 'Supprimer', true)
     .then(function (ok) {
       if (!ok) return null;
       return uiPrompt('Confirme avec ton mot de passe', { okLabel: 'Supprimer le compte', type: 'password' });
@@ -543,8 +612,43 @@ defineView('shared-album', {
   section: 'albums',
   title: 'Album',
   enter: renderSharedAlbum,
-  exit: function () { releaseBlobUrls('sharedAlbum'); }
+  exit: function () { releaseBlobUrls('sharedAlbum'); },
+  actions: function () {
+    return [{ svg: DOWNLOAD_ICON, label: 'Télécharger tout l\'album dans la galerie', onClick: downloadSharedAlbum }];
+  }
 });
+
+/* Tout l'album d'un proche dans la galerie : les photos pas encore reçues en grand le sont d'abord
+   (avec Internet). Sur l'iPhone, la feuille de partage s'ouvre ensuite d'un toucher. */
+function downloadSharedAlbum() {
+  var photos = sharedAlbumPhotos.slice();
+  if (!photos.length) return;
+  var missing = photos.filter(function (p) { return !p.blob; });
+  var files = function () {
+    return photos.filter(function (p) { return p.blob; }).map(function (p) { return { blob: p.blob, name: photoFileName(p) }; });
+  };
+  // Tout est déjà là (ou rien ne peut être reçu maintenant) : celles qui sont là, tout de suite.
+  if (!missing.length || !isSignedIn()) {
+    if (!files().length) return uiAlert('Les photos ne sont pas encore reçues en taille réelle : il faut être connecté au partage, avec Internet.');
+    return saveManyToGallery(files());
+  }
+  var progress = showProgress('Réception des photos…');
+  missing.reduce(function (chain, photo, i) {
+    return chain.then(function () {
+      progress.update('Réception des photos (' + (i + 1) + ' / ' + missing.length + ')…', i / missing.length);
+      return downloadSharedPhoto(photo).then(function (blob) { photo.blob = blob; }, function () { /* sans elle */ });
+    });
+  }, Promise.resolve()).then(function () {
+    progress.close();
+    var ready = files();
+    var lacking = photos.length - ready.length;
+    if (!ready.length) return uiAlert('Les photos ne sont pas encore reçues en taille réelle (connexion ?).');
+    // Nouveau toucher : l'attente a été longue (l'iPhone n'ouvre la feuille de partage qu'aussitôt après un toucher).
+    return showDialog(plural(ready.length, 'photo prête', 'photos prêtes') + (lacking ? ' (' + plural(lacking, 'pas encore reçue', 'pas encore reçues') + ')' : '') + '.', {
+      cancelable: true, okLabel: 'Télécharger', onConfirm: function () { return saveManyToGallery(ready); }
+    });
+  });
+}
 
 var sharedAlbumPhotos = [];
 var sharedAlbumStats = {};
@@ -634,8 +738,11 @@ onCloudChange(function (what) {
       else scheduleSharedRender();
     }
   } else if (what === 'data') {
+    updateSyncIndicator(); // connexion, déconnexion
     if (view === 'sharing') { renderSharing(); renderTopActions(); }
     else if (view === 'share-category' && !shareToggleBusy) renderShareCategory(currentEntry().params);
+  } else if (what === 'usage') {
+    if (view === 'sharing' && !usageMeasuring) renderSharing();
   } else if (what === 'shared') {
     if (sharedView) scheduleSharedRender();
   } else if (what.indexOf('photo:') === 0) {

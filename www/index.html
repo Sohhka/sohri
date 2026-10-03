@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SOHRI</title>
-<meta name="description" content="Voyage au Japon : convertisseur, notes, adresses, images et documents, même sans connexion.">
+<meta name="description" content="Voyage au Japon : convertisseur, dépenses, météo, notes, adresses, phrases utiles, images et documents, même sans connexion.">
 <meta name="theme-color" content="#FFFFFF">
 <!-- Version web installée sur l'iPhone (« Sur l'écran d'accueil ») : plein écran, barre d'état
      transparente (texte blanc, voir .ios-standalone dans style.css), nom et icône. -->
@@ -80,10 +80,12 @@
       <div class="drawer-backdrop" id="drawerBackdrop"></div>
       <div class="drawer-panel">
         <p class="drawer-title">SOHRI</p>
-        <button class="drawer-item" type="button" data-section="converter"><span class="drawer-icon">💴</span>Convertisseur ¥ → €</button>
+        <button class="drawer-item" type="button" data-section="converter"><span class="drawer-icon">💴</span>Convertisseur ¥ ⇄ €</button>
+        <button class="drawer-item" type="button" data-section="expenses"><span class="drawer-icon">🧾</span>Dépenses</button>
         <button class="drawer-item" type="button" data-section="weather"><span class="drawer-icon">🌤️</span>Météo &amp; heure</button>
         <button class="drawer-item" type="button" data-section="notes"><span class="drawer-icon">📝</span>Notes</button>
         <button class="drawer-item" type="button" data-section="addresses"><span class="drawer-icon">📍</span>Carnet d'adresses</button>
+        <button class="drawer-item" type="button" data-section="phrases"><span class="drawer-icon">🗣️</span>Phrases utiles</button>
         <button class="drawer-item" type="button" data-section="albums"><span class="drawer-icon">🖼️</span>Images</button>
         <button class="drawer-item" type="button" data-section="documents"><span class="drawer-icon">📂</span>Documents</button>
         <button id="drawerSharing" class="drawer-item" type="button" data-section="sharing" hidden><span class="drawer-icon">👥</span>Partage</button>
@@ -96,16 +98,20 @@
 
       <!-- CONVERTISSEUR -->
       <section id="view-converter" class="view">
+        <!-- Montant saisi : en yens (vers les euros), ou en euros dans l'autre sens (bouton ⇅) -->
         <div class="field">
-          <label for="yenInput" class="field-label">Yen</label>
+          <label for="yenInput" id="amountLabel" class="field-label">Yen</label>
           <div class="input-row">
-            <span class="currency-sign">¥</span>
+            <span id="amountSign" class="currency-sign">¥</span>
             <input id="yenInput" type="text" inputmode="numeric" autocomplete="off" placeholder="0" aria-label="Montant en yens">
+            <button id="sumAddBtn" class="sum-add-btn" type="button" aria-label="Additionner : ajouter ce prix au total" title="Additionner plusieurs prix">＋</button>
           </div>
+          <div id="sumList" class="sum-list" hidden></div>
         </div>
 
         <div class="rate-block" id="rateBlock">
           <div class="rate-view" id="rateView">
+            <button class="swap-btn" id="swapBtn" type="button" aria-label="Inverser : convertir des euros en yens" title="Inverser le sens">⇅</button>
             <span id="rateText"></span>
             <button class="rate-edit-btn" id="rateEditBtn" type="button">Modifier</button>
           </div>
@@ -118,10 +124,11 @@
         </div>
 
         <div class="field">
-          <span class="field-label">Euro</span>
+          <span id="resultLabel" class="field-label">Euro</span>
           <div class="result-row">
             <span id="eurResult" class="result-value">0,00</span>
-            <span class="currency-sign">€</span>
+            <span id="resultSign" class="currency-sign">€</span>
+            <button id="noteExpenseBtn" class="expense-btn" type="button" aria-label="Noter comme dépense" title="Noter comme dépense" hidden>🧾＋</button>
           </div>
         </div>
         <!-- Heure au Japon et en France : calculée par le téléphone, sans Internet -->
@@ -139,6 +146,43 @@
           </div>
         </div>
         <p id="rateNote" class="footnote">Taux indicatif : il se met à jour tout seul dès que tu as Internet. Fonctionne sans connexion.</p>
+      </section>
+
+      <!-- DÉPENSES : totaux (voyage, aujourd'hui, par catégorie), puis les achats jour par jour -->
+      <section id="view-expenses" class="view" hidden>
+        <div id="expensesSummary"></div>
+        <div id="expensesList" class="list"></div>
+        <p id="expensesEmpty" class="empty" hidden></p>
+      </section>
+
+      <!-- UNE DÉPENSE : nouvelle ou modifiée -->
+      <section id="view-expense-edit" class="view" hidden>
+        <div class="segmented expense-currency" role="radiogroup" aria-label="Devise">
+          <button class="segment" type="button" role="radio" data-currency="JPY">¥ Yens</button>
+          <button class="segment" type="button" role="radio" data-currency="EUR">€ Euros</button>
+        </div>
+        <div class="field">
+          <label for="expenseAmount" class="field-label">Montant</label>
+          <div class="input-row">
+            <span id="expenseSign" class="currency-sign">¥</span>
+            <input id="expenseAmount" type="text" inputmode="numeric" autocomplete="off" placeholder="0" aria-label="Montant">
+          </div>
+          <p id="expenseConverted" class="expense-converted"></p>
+        </div>
+        <span class="field-label">Catégorie</span>
+        <div id="expenseCategories" class="chip-row wrap"></div>
+        <label for="expenseLabel" class="field-label">Libellé <span class="optional">(facultatif)</span></label>
+        <input id="expenseLabel" type="text" class="text-input" maxlength="80" placeholder="Ex. : Ramen Ichiran, Pass JR, souvenirs…">
+        <label for="expenseDate" class="field-label">Date et heure</label>
+        <input id="expenseDate" type="datetime-local" class="text-input">
+        <p id="expenseRate" class="hint"></p>
+        <button id="expenseDeleteBtn" class="secondary-btn block danger-text" type="button" hidden>🗑️ Supprimer cette dépense</button>
+      </section>
+
+      <!-- PHRASES UTILES EN JAPONAIS : à montrer en grand, hors connexion -->
+      <section id="view-phrases" class="view" hidden>
+        <input id="phrasesSearch" class="search-input" type="search" placeholder="Rechercher une phrase" autocomplete="off" aria-label="Rechercher une phrase">
+        <div id="phrasesContent"></div>
       </section>
 
       <!-- MÉTÉO ET HEURE : heures (sans Internet) et météo de la semaine (gardée sur le téléphone) -->
@@ -282,7 +326,8 @@
         <p class="hint">« Automatique » suit le réglage du téléphone.</p>
 
         <h2 class="section-title">Sauvegarde</h2>
-        <p class="hint">Enregistre toutes les notes, adresses, images et documents dans un seul fichier (sur le téléphone, Google Drive, iCloud Drive...), pour les retrouver après une réinstallation ou sur un autre téléphone, Android comme iPhone.</p>
+        <p class="hint">Enregistre toutes les notes, adresses, images, documents et dépenses dans un seul fichier (sur le téléphone, Google Drive, iCloud Drive...), pour les retrouver après une réinstallation ou sur un autre téléphone, Android comme iPhone.</p>
+        <p id="backupInfo" class="backup-info"></p>
         <button id="backupBtn" class="secondary-btn block" type="button">💾 Créer une sauvegarde</button>
         <input id="restoreInput" type="file" hidden>
         <button id="restoreBtn" class="secondary-btn block" type="button">♻️ Restaurer une sauvegarde</button>
@@ -291,6 +336,10 @@
         <p id="storageInfo" class="hint"></p>
         <p id="appVersion" class="hint"></p>
         <p id="installInfo" class="hint" hidden>Pour installer SOHRI sur l'iPhone (plein écran, hors connexion)&nbsp;: dans Safari, touche Partager (ou ••• puis Partager), puis «&nbsp;Sur l'écran d'accueil&nbsp;». Les données de l'appli installée sont séparées de celles de Safari.</p>
+
+        <h2 class="section-title">Aide</h2>
+        <p class="hint">Si quelque chose ne marche pas, envoie ce rapport par message (WhatsApp, SMS…) à la personne qui t'aide : il dit comment va l'appli (version, synchronisation, dernières erreurs), sans rien de personnel (ni texte, ni photo, ni adresse e-mail).</p>
+        <button id="diagnosticBtn" class="secondary-btn block" type="button">🩺 Envoyer un rapport de diagnostic</button>
       </section>
 
       <!-- PARTAGE : compte, contacts, ce que je partage, ce que mes proches partagent -->
@@ -448,8 +497,17 @@
     <p id="taxiAddress" class="taxi-address" lang="ja"></p>
   </div>
 
+  <!-- Phrase en japonais à montrer, en grand (noir sur blanc, quel que soit le thème) -->
+  <div id="phraseCard" class="taxi phrase-card" hidden>
+    <button id="phraseCloseBtn" class="taxi-close" type="button" aria-label="Fermer">×</button>
+    <p id="phraseJa" class="phrase-card-ja" lang="ja"></p>
+    <p id="phraseRomaji" class="phrase-card-romaji"></p>
+    <p id="phraseFr" class="phrase-card-fr"></p>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+<script src="js/diagnostic.js"></script>
 <script src="js/vendor/marked.umd.js"></script>
 <script src="js/db.js"></script>
 <script src="js/ui.js"></script>
@@ -460,9 +518,11 @@
 <script src="js/docviewer.js"></script>
 <script src="js/folders.js"></script>
 <script src="js/converter.js"></script>
+<script src="js/expenses.js"></script>
 <script src="js/weather.js"></script>
 <script src="js/notes.js"></script>
 <script src="js/addresses.js"></script>
+<script src="js/phrases.js"></script>
 <script src="js/gallery.js"></script>
 <script src="js/documents.js"></script>
 <script src="js/backup.js"></script>

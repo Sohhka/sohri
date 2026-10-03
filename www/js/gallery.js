@@ -92,7 +92,12 @@ defineView('album', {
     currentAlbum = null;
   },
   actions: function () {
-    if (selectingPhotos) return [{ text: 'Tout', label: 'Tout sélectionner', onClick: selectAllPhotos }];
+    if (selectingPhotos) {
+      return [
+        { svg: DOWNLOAD_ICON, label: 'Télécharger dans la galerie', onClick: saveSelectedPhotos },
+        { text: 'Tout', label: 'Tout sélectionner', onClick: selectAllPhotos }
+      ];
+    }
     return [
       { icon: '+', label: 'Ajouter des photos', onClick: function () { byId('albumPhotos').click(); } },
       { icon: '⋮', label: "Options de l'album", onClick: showAlbumMenu }
@@ -338,6 +343,19 @@ function updateSelectionUI() {
 }
 
 byId('selectionCancelBtn').addEventListener('click', exitPhotoSelection);
+
+/* Photos sélectionnées : dans la galerie du téléphone (bouton ⬇ en haut, voir saveManyToGallery,
+   files.js). Sur l'iPhone, la feuille de partage s'ouvre tout de suite, en réponse au toucher. */
+function saveSelectedPhotos() {
+  var photos = selectedPhotos().filter(function (photo) { return photo.blob; });
+  if (!photos.length) {
+    showToast('Touche d\'abord les photos à télécharger.');
+    return;
+  }
+  saveManyToGallery(photos.map(function (photo) { return { blob: photo.blob, name: photoFileName(photo) }; })).then(function () {
+    if (isSelectingPhotos()) exitPhotoSelection();
+  });
+}
 
 byId('selectionMoveBtn').addEventListener('click', function () {
   var photos = selectedPhotos();

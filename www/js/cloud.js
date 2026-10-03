@@ -23,7 +23,7 @@ var PASSWORD_MIN = 8;
 var SYNC_QUERY_PAGE = 40;
 
 var cloudSession = null;  // { uid, email, refreshToken, idToken, expiresAt }
-var cloudState = { profile: null, contacts: [], myGrants: {}, grantsToMe: [], deviceId: null };
+var cloudState = { profile: null, contacts: [], myGrants: {}, grantsToMe: [], deviceId: null, familyUsage: [] };
 var cloudStatus = { state: 'idle', progress: null, lastSync: 0, error: null };
 var cloudListeners = [];
 var cloudRefreshing = null;
@@ -327,13 +327,14 @@ function cloudPut(key, value) {
 /* ---------- Démarrage ---------- */
 function cloudStart() {
   if (!cloudEnabled()) return Promise.resolve();
-  return Promise.all([cloudGet('session'), cloudGet('profile'), cloudGet('contacts'), cloudGet('myGrants'), cloudGet('grantsToMe'), deviceId()])
+  return Promise.all([cloudGet('session'), cloudGet('profile'), cloudGet('contacts'), cloudGet('myGrants'), cloudGet('grantsToMe'), deviceId(), cloudGet('familyUsage')])
     .then(function (r) {
       cloudSession = r[0];
       cloudState.profile = r[1];
       cloudState.contacts = r[2] || [];
       cloudState.myGrants = r[3] || {};
       cloudState.grantsToMe = r[4] || [];
+      cloudState.familyUsage = r[6] || [];
       notifyCloud('data');
       if (cloudSession) syncNow();
     })['catch'](function (err) { console.error(err); });
@@ -460,7 +461,10 @@ function forgetAccountData(uid) {
 }
 
 function profileState(profile) {
-  return { name: profile.name, code: profile.code, sources: profile.sources || {}, syncAll: !!profile.syncAll };
+  return {
+    name: profile.name, code: profile.code, sources: profile.sources || {}, syncAll: !!profile.syncAll,
+    usageBytes: profile.usageBytes || 0, usageAt: profile.usageAt || null
+  };
 }
 
 function forgetAccount() {
@@ -473,6 +477,7 @@ function clearCloudData() {
   cloudState.contacts = [];
   cloudState.myGrants = {};
   cloudState.grantsToMe = [];
+  cloudState.familyUsage = [];
   return dbGetAll('cloud').then(function (rows) {
     return dbWrite(['cloud', 'sharedAlbums', 'sharedPhotos', 'sharedComments'], function (tx) {
       rows.forEach(function (row) { if (row.key !== 'device') tx.objectStore('cloud')['delete'](row.key); });
@@ -715,6 +720,13 @@ function syncNow() {
     .then(downloadOwnPhotos)
     .then(downloadSharedPhotos)
     .then(function () {
+      // Espace en ligne : mesuré une fois par jour (une mesure qui échoue sera refaite).
+      return measureOnlineUsage().then(null, function (err) {
+        if (err.cloud === 'offline' || err.cloud === 'signed-out') throw err;
+        console.warn('Espace en ligne pas mesuré', err);
+      });
+    })
+    .then(function () {
       if (publishError) throw publishError;
       setCloudStatus('done');
     })
@@ -935,7 +947,7 @@ function applyAccountAlbums(docs, merging, gone) {
         records['pub:' + doc._id] = null;
         return;
       }
-      var remote = { kind: 'album', rid: doc._id, name: doc.name || 'Album', icon: doc.icon || '' };
+      var remote = { kind: 'album', rid: doc._id, name: doc.name || 'Album', icon: doc.icon || '', time: doc._updateTime || null };
       if (!album) {
         if (done && !merging) return; // supprimé ici : la suppression partira
         album = { kind: 'photos', name: remote.name, createdAt: Date.now(), rid: doc._id, fromAccount: uid };
@@ -985,7 +997,7 @@ function applyAccountPhotos(docs, merging) {
         records['pend:' + rid] = null;
         return;
       }
-      var remote = { kind: 'photo', rid: rid, album: doc.album, parts: doc.parts, caption: doc.caption || '', location: doc.location || '' };
+      var remote = { kind: 'photo', rid: rid, album: doc.album, parts: doc.parts, caption: doc.caption || '', location: doc.location || '', time: doc._updateTime || null };
       if (!photo) {
         if (done && !merging) return; // supprimée ici : la suppression partira
         records['pend:' + rid] = {
@@ -1082,7 +1094,7 @@ function fetchOwnPhoto(item) {
         name: '', takenAt: doc.takenAt, createdAt: Date.now(), caption: doc.caption || '', location: doc.location || '',
         rid: item.rid, fromAccount: uid
       };
-      records['pub:' + item.rid] = { kind: 'photo', rid: item.rid, album: doc.album, parts: doc.parts, caption: photo.caption, location: photo.location };
+      records['pub:' + item.rid] = { kind: 'photo', rid: item.rid, album: doc.album, parts: doc.parts, caption: photo.caption, location: photo.location, time: doc._updateTime || null };
       return dbWrite(['folders', 'photos', 'cloud'], function (tx) {
         var addPhoto = function (albumId) {
           photo.albumId = albumId;
@@ -1131,10 +1143,35 @@ function photoLocation(photo) {
   return cloudName(photo.location, 100);
 }
 
+/* Écritures conditionnelles (comme pour les rubriques, sync.js) : un album ou une photo n'est
+   modifié en ligne que s'il n'y a pas changé depuis le dernier échange (version « time ») ; sinon
+   l'envoi est refusé, et la synchronisation refaite aussitôt : les changements faits ailleurs sont
+   repris d'abord (champ par champ), puis les nôtres repartent. Les suppressions, elles, passent
+   toujours. Échanges des versions précédentes, sans version notée : envoi sans condition. */
+var imageConflictRounds = 0;
+
+function imageVersion(done) {
+  if (!done) return { exists: false };
+  return done.time ? { updateTime: done.time } : null;
+}
+function conditionalWrite(write, version) {
+  if (version) write.currentDocument = version;
+  return write;
+}
+function lastWriteTime(response) {
+  var results = (response && response.writeResults) || [];
+  return (results[results.length - 1] || {}).updateTime || null;
+}
+
 function publishChanges(albums, photos, published) {
   var me = userPath();
   var tasks = [];
   var albumIds = {};
+  var conflicts = 0;
+  var refused = function (err) {
+    if (!isWriteConflict(err)) throw err;
+    conflicts++; // relu à la synchronisation suivante, lancée aussitôt
+  };
   albums.forEach(function (album) {
     var rid = albumRemoteId(album);
     var name = cloudName(album.name, 100) || 'Album';
@@ -1143,9 +1180,10 @@ function publishChanges(albums, photos, published) {
     var done = published[rid];
     if (!done || done.name !== name || done.icon !== icon) {
       tasks.push(function () {
-        return fsCommit([fsSet(me + '/albums/' + rid, { name: name, icon: icon }, { time: ['updatedAt'] })]).then(function () {
-          return savePublished({ kind: 'album', rid: rid, name: name, icon: icon });
-        });
+        var write = conditionalWrite(fsSet(me + '/albums/' + rid, { name: name, icon: icon }, { time: ['updatedAt'] }), imageVersion(done));
+        return fsCommit([write]).then(function (response) {
+          return savePublished({ kind: 'album', rid: rid, name: name, icon: icon, time: lastWriteTime(response) });
+        }).then(null, refused);
       });
     }
   });
@@ -1166,12 +1204,14 @@ function publishChanges(albums, photos, published) {
         var fields = { album: album };
         if (caption) fields.caption = caption;
         if (location) fields.location = location;
-        return fsCommit([fsSet(me + '/photos/' + rid, fields, { mask: ['album', 'caption', 'location'], time: ['updatedAt'] })]).then(function () {
+        var write = conditionalWrite(fsSet(me + '/photos/' + rid, fields, { mask: ['album', 'caption', 'location'], time: ['updatedAt'] }), imageVersion(done));
+        return fsCommit([write]).then(function (response) {
           done.album = album;
           done.caption = caption;
           done.location = location;
+          done.time = lastWriteTime(response) || done.time;
           return savePublished(done);
-        });
+        }).then(null, refused);
       });
     }
   });
@@ -1184,6 +1224,7 @@ function publishChanges(albums, photos, published) {
       setCloudStatus('syncing', { progress: { label: 'Envoi des photos partagées', done: i, total: uploads.length } });
       return uploadPhoto(item.photo, item.rid, item.album).then(null, function (err) {
         if (err.cloud === 'offline' || err.cloud === 'signed-out') throw err;
+        if (isWriteConflict(err)) return refused(err); // déjà en ligne (envoyée par un autre appareil)
         console.warn('Photo pas encore envoyée', item.rid, err);
         if (!err.cloud) err.userMessage = "Une photo n'a pas pu être envoyée : nouvel essai à la prochaine synchronisation.";
         uploadError = uploadError || err;
@@ -1217,6 +1258,8 @@ function publishChanges(albums, photos, published) {
     }
   });
   return tasks.reduce(function (chain, task) { return chain.then(task); }, Promise.resolve()).then(function () {
+    imageConflictRounds = conflicts ? imageConflictRounds + 1 : 0;
+    if (conflicts && imageConflictRounds <= 3) cloudSyncAgain = true;
     if (uploadError) throw uploadError;
   });
 }
@@ -1243,9 +1286,10 @@ function uploadPhoto(photo, rid, album) {
       var location = photoLocation(photo);
       if (caption) meta.caption = caption;
       if (location) meta.location = location;
-      writes.push(fsSet(me + '/photos/' + rid, meta, { time: ['updatedAt'] }));
-      return fsCommit(writes).then(function () {
-        return savePublished({ kind: 'photo', rid: rid, album: album, parts: parts, caption: caption, location: location });
+      // Nouvelle en ligne : refusée (avec ses morceaux) si un autre appareil l'a envoyée entre-temps.
+      writes.push(conditionalWrite(fsSet(me + '/photos/' + rid, meta, { time: ['updatedAt'] }), { exists: false }));
+      return fsCommit(writes).then(function (response) {
+        return savePublished({ kind: 'photo', rid: rid, album: album, parts: parts, caption: caption, location: location, time: lastWriteTime(response) });
       });
     });
   });
@@ -1708,12 +1752,63 @@ function commentStats() {
   });
 }
 
+/* ---------- Espace en ligne ----------
+   Le serveur gratuit offre 1 Go pour tout le projet, famille comprise. Une fois par jour, un appareil
+   de chaque compte mesure ce que son compte occupe (photos partagées, rubriques synchronisées) et
+   l'inscrit dans son profil (usageBytes, usageAt) ; l'écran Partage additionne le mien et celui de
+   mes contacts (« familyUsage », gardé pour le hors connexion). C'est une estimation : tailles des
+   photos et des fichiers, plus une part fixe par miniature, élément et commentaire. */
+var FREE_QUOTA = 1024 * 1024 * 1024;
+var USAGE_EVERY = 20 * 3600000;
+var USAGE_THUMB = 25 * 1024;
+var USAGE_ENTRY = 1024;
+
+function measureOnlineUsage(force) {
+  var profile = cloudState.profile;
+  if (!profile || (!force && profile.usageAt && Date.now() - serverTime(profile.usageAt) < USAGE_EVERY)) return Promise.resolve(null);
+  var bytes = 0;
+  var sum = function (collection, mask, add) {
+    return listOwnCollection(collection, mask, function (doc) { add(fromFields(doc.fields)); });
+  };
+  return sum('photos', ['size'], function (d) { if (d.size) bytes += d.size + USAGE_THUMB; }).then(function () {
+    return sum('blobs', ['size'], function (d) { bytes += d.size || 0; });
+  }).then(function () {
+    return sum('items', ['kind'], function (d) { if (d.kind) bytes += USAGE_ENTRY; });
+  }).then(function () {
+    return sum('comments', ['photo'], function () { bytes += USAGE_ENTRY / 2; });
+  }).then(function () {
+    bytes = Math.round(bytes);
+    return fsCommit([fsSet(userPath(), { usageBytes: bytes }, { mask: ['usageBytes'], time: ['usageAt'] })]);
+  }).then(function () {
+    profile.usageBytes = bytes;
+    profile.usageAt = new Date().toISOString();
+    return cloudPut('profile', profile);
+  }).then(loadFamilyUsage).then(function () {
+    notifyCloud('usage');
+  });
+}
+
+/* Ce qu'occupe chacun de mes contacts (mesuré par leurs appareils). */
+function loadFamilyUsage() {
+  return Promise.all(cloudState.contacts.map(function (contact) {
+    return fsGet(userPath(contact.uid)).then(function (p) {
+      return { uid: contact.uid, name: contact.name, bytes: p && p.usageAt ? p.usageBytes || 0 : null, at: p ? p.usageAt || null : null };
+    }, function (err) {
+      if (err.cloud === 'offline' || err.cloud === 'signed-out') throw err;
+      return { uid: contact.uid, name: contact.name, bytes: null, at: null };
+    });
+  })).then(function (list) {
+    cloudState.familyUsage = list;
+    return cloudPut('familyUsage', list);
+  });
+}
+
 /* ---------- Événements ---------- */
 onDbChange(function (stores, remote) {
   if (remote || !cloudSession) return; // changement reçu d'un autre appareil : déjà en ligne
   var touches = function (names) { return names.some(function (name) { return stores.indexOf(name) >= 0; }); };
   if ((ownImagesOnline() && touches(['folders', 'photos'])) ||
-    (syncAllEnabled() && touches(['notes', 'addresses', 'folders', 'documents', 'documentFiles']))) schedulePublish();
+    (syncAllEnabled() && touches(['notes', 'addresses', 'folders', 'documents', 'documentFiles', 'expenses']))) schedulePublish();
 });
 window.addEventListener('online', function () { if (cloudSession) syncNow(); });
 document.addEventListener('visibilitychange', function () {
